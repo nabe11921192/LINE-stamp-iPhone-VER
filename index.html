@@ -6,39 +6,43 @@
   <title>iPhone対応画像エディタ</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <style>
-    body {
+    html, body {
       margin: 0; padding: 0;
       font-family: sans-serif;
       background: #f0f0f0;
+      overscroll-behavior-y: contain;
     }
     .container {
       display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 20px;
+      flex-direction: column;
+      align-items: center;
       padding: 10px;
     }
     .box-wrapper {
       display: flex;
       flex-direction: column;
       align-items: center;
+      margin-bottom: 30px;
+      border: 1px solid #ccc;
+      background: #fff;
+      padding: 10px;
     }
     .box {
       width: 370px;
       height: 320px;
       border: 1px solid #ccc;
       background: white;
+      touch-action: none;
     }
     .label {
-      margin-top: 5px;
+      margin: 5px 0;
     }
     .controls {
       display: flex;
-      flex-direction: row;
       flex-wrap: wrap;
-      justify-content: center;
       gap: 10px;
-      margin-top: 20px;
+      justify-content: center;
+      margin-top: 10px;
     }
     .controls button, .controls input[type=file] {
       padding: 6px 12px;
@@ -49,12 +53,6 @@
 <body>
 
 <div class="container" id="container"></div>
-<div class="controls">
-  <button onclick="undo()">戻る</button>
-  <button onclick="redo()">進む</button>
-  <button onclick="saveAllImages()">保存</button>
-  <button onclick="confirmReset()">リセット</button>
-</div>
 
 <script>
 let canvases = [];
@@ -87,6 +85,31 @@ function createBoxes() {
     fileInput.onchange = (e) => handleFileSelect(e, canvasEl.id);
     wrapper.appendChild(fileInput);
 
+    const controls = document.createElement('div');
+    controls.className = 'controls';
+
+    const undoBtn = document.createElement('button');
+    undoBtn.textContent = '戻る';
+    undoBtn.onclick = () => undo(canvasEl.id);
+
+    const redoBtn = document.createElement('button');
+    redoBtn.textContent = '進む';
+    redoBtn.onclick = () => redo(canvasEl.id);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = '保存';
+    saveBtn.onclick = () => saveImage(canvasEl.id);
+
+    const resetBtn = document.createElement('button');
+    resetBtn.textContent = 'リセット';
+    resetBtn.onclick = () => confirmReset(canvasEl.id);
+
+    controls.appendChild(undoBtn);
+    controls.appendChild(redoBtn);
+    controls.appendChild(saveBtn);
+    controls.appendChild(resetBtn);
+    wrapper.appendChild(controls);
+
     container.appendChild(wrapper);
 
     const fabricCanvas = new fabric.Canvas(canvasEl.id, {
@@ -108,6 +131,11 @@ function createBoxes() {
         opt.target.bringToFront();
       }
     });
+
+    // マルチタッチ操作を有効に
+    fabricCanvas.on('touch:gesture', function() {
+      canvasEl.style.touchAction = 'none';
+    });
   }
 }
 
@@ -119,13 +147,14 @@ function handleFileSelect(e, canvasId) {
     const imgSrc = evt.target.result;
     const fabricCanvas = canvases.find(c => c.getElement().id === canvasId);
     fabric.Image.fromURL(imgSrc, function(fabricImg) {
+      const scale = Math.min(370 / fabricImg.width, 320 / fabricImg.height);
       fabricImg.set({
         left: 0,
         top: 0,
         originX: 'left',
         originY: 'top',
-        scaleX: 370 / fabricImg.width,
-        scaleY: 320 / fabricImg.height
+        scaleX: scale,
+        scaleY: scale
       });
       fabricCanvas.add(fabricImg);
       fabricCanvas.setActiveObject(fabricImg);
@@ -135,20 +164,18 @@ function handleFileSelect(e, canvasId) {
   reader.readAsDataURL(file);
 }
 
-function saveAllImages() {
-  canvases.forEach((canvas, i) => {
-    const label = 'image' + (i + 1);
-    canvas.discardActiveObject();
-    canvas.clearContext(canvas.contextTop);
-    canvas.renderAll();
-    canvas.getElement().toBlob(blob => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = label + '.png';
-      a.click();
-    }, 'image/png');
-  });
+function saveImage(canvasId) {
+  const canvas = canvases.find(c => c.getElement().id === canvasId);
+  canvas.discardActiveObject();
+  canvas.clearContext(canvas.contextTop);
+  canvas.renderAll();
+  canvas.getElement().toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = canvasId + '.png';
+    a.click();
+  }, 'image/png');
 }
 
 function saveState(canvas) {
@@ -161,24 +188,25 @@ function saveState(canvas) {
   historyMap.get(id).redo = [];
 }
 
-function restoreState(type) {
-  canvases.forEach(canvas => {
-    const id = canvas.getElement().id;
-    const history = historyMap.get(id);
-    if (!history || !history[type].length) return;
-    const current = canvas.toJSON();
-    const state = history[type].pop();
-    if (type === 'undo') history.redo.push(current);
-    else history.undo.push(current);
-    canvas.loadFromJSON(state, () => canvas.renderAll());
-  });
+function restoreState(canvasId, type) {
+  const canvas = canvases.find(c => c.getElement().id === canvasId);
+  const history = historyMap.get(canvasId);
+  if (!history || !history[type].length) return;
+  const current = canvas.toJSON();
+  const state = history[type].pop();
+  if (type === 'undo') history.redo.push(current);
+  else history.undo.push(current);
+  canvas.loadFromJSON(state, () => canvas.renderAll());
 }
 
-function undo() { restoreState('undo'); }
-function redo() { restoreState('redo'); }
-function confirmReset() {
-  if (confirm('すべての画像を消去しますか？')) {
-    createBoxes();
+function undo(canvasId) { restoreState(canvasId, 'undo'); }
+function redo(canvasId) { restoreState(canvasId, 'redo'); }
+
+function confirmReset(canvasId) {
+  if (confirm('この枠の画像をすべて消去しますか？')) {
+    const canvas = canvases.find(c => c.getElement().id === canvasId);
+    canvas.clear();
+    saveState(canvas);
   }
 }
 
