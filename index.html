@@ -2,15 +2,20 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>iPhone対応画像エディタ 完全版</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>iPhone完全対策画像エディタ</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <style>
     html, body {
       margin: 0; padding: 0;
+      height: 100%;
       font-family: sans-serif;
       background: #f0f0f0;
-      overscroll-behavior-y: contain;
+      overscroll-behavior: none;
+      overflow: hidden;
+      touch-action: none;
+      position: fixed;
+      width: 100%;
     }
     .container {
       display: flex;
@@ -41,9 +46,12 @@
       justify-content: center;
       margin-top: 10px;
     }
-    .controls button, .top-controls button, .top-controls input[type=file] {
+    .controls button, .top-controls button {
       padding: 6px 12px;
       font-size: 14px;
+    }
+    input[type="file"] {
+      display: none;
     }
     .template-modal {
       position: fixed;
@@ -100,17 +108,25 @@ function createBoxes() {
     const topControls = document.createElement('div');
     topControls.className = 'top-controls';
 
+    const fileLabel = document.createElement('label');
+    fileLabel.textContent = '画像選択';
+    fileLabel.style.padding = '6px 12px';
+    fileLabel.style.background = '#ccc';
+    fileLabel.style.borderRadius = '4px';
+    fileLabel.style.cursor = 'pointer';
+
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*';
     fileInput.onchange = (e) => handleFileSelect(e, canvasEl.id);
+    fileLabel.appendChild(fileInput);
+    topControls.appendChild(fileLabel);
 
     const templateBtn = document.createElement('button');
     templateBtn.textContent = 'テンプレ';
     templateBtn.onclick = () => showTemplateSelector(canvasEl.id);
-
-    topControls.appendChild(fileInput);
     topControls.appendChild(templateBtn);
+
     wrapper.appendChild(topControls);
 
     const controls = document.createElement('div');
@@ -172,20 +188,27 @@ function createBoxes() {
       }
     });
 
+    let lastScale = 1;
     fabricCanvas.on('touch:gesture', function(opt) {
       const obj = fabricCanvas.getActiveObject();
       if (opt.e.touches && opt.e.touches.length === 2 && obj) {
-        const scale = opt.e.scale;
-        obj.scaleX *= scale;
-        obj.scaleY *= scale;
-        fabricCanvas.requestRenderAll();
-        saveState(fabricCanvas);
+        if (opt.self.scale !== undefined) {
+          const scaleChange = opt.self.scale / lastScale;
+          obj.scaleX *= scaleChange;
+          obj.scaleY *= scaleChange;
+          lastScale = opt.self.scale;
+          fabricCanvas.requestRenderAll();
+        }
       }
       opt.e.preventDefault();
     });
+
+    fabricCanvas.on('touch:drag', function() {});
+    fabricCanvas.on('touch:orientation', function() {});
+    fabricCanvas.on('touch:shake', function() {});
+    fabricCanvas.on('touch:longpress', function() {});
   }
 }
-
 
 function handleFileSelect(e, canvasId) {
   const file = e.target.files[0];
