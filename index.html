@@ -2,30 +2,35 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>iPhone対応画像エディタ 完全版</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>最終版画像エディタ</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <style>
     html, body {
       margin: 0; padding: 0;
+      height: 100%;
       font-family: sans-serif;
       background: #f0f0f0;
-      overscroll-behavior-y: contain;
+      overscroll-behavior: none;
+      overflow: hidden;
+      touch-action: none;
+      position: fixed;
+      width: 100%;
     }
     .container {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 10px;
+      justify-content: start;
+      height: 100%;
+      padding: 5px;
     }
     .box-wrapper {
       display: flex;
       flex-direction: column;
       align-items: center;
-      margin-bottom: 30px;
-      border: 1px solid #ccc;
       background: #fff;
-      padding: 10px;
+      padding: 5px;
     }
     .box {
       width: 370px;
@@ -39,11 +44,14 @@
       flex-wrap: wrap;
       gap: 10px;
       justify-content: center;
-      margin-top: 10px;
+      margin: 5px;
     }
-    .controls button, .top-controls button, .top-controls input[type=file] {
+    .controls button, .top-controls button {
       padding: 6px 12px;
       font-size: 14px;
+    }
+    input[type="file"] {
+      display: none;
     }
     .template-modal {
       position: fixed;
@@ -54,8 +62,9 @@
       padding: 20px;
       z-index: 100;
       display: none;
-      flex-direction: column;
+      flex-wrap: wrap;
       gap: 10px;
+      max-width: 90vw;
     }
     .template-modal img {
       width: 100px;
@@ -64,128 +73,61 @@
   </style>
 </head>
 <body>
-<div class="container" id="container"></div>
+<div class="container">
+  <div class="box-wrapper">
+    <div class="box"><canvas id="canvas0" width="370" height="320"></canvas></div>
+    <div class="top-controls">
+      <label style="background:#ccc;padding:6px 12px;border-radius:4px;cursor:pointer;">
+        画像選択<input type="file" accept="image/*" onchange="handleFileSelect(event, 'canvas0')">
+      </label>
+      <button onclick="showTemplateSelector('canvas0')">テンプレ</button>
+      <button onclick="deleteActiveObject('canvas0')">削除</button>
+    </div>
+    <div class="controls">
+      <button onclick="undo('canvas0')">戻る</button>
+      <button onclick="redo('canvas0')">進む</button>
+      <button onclick="saveImage('canvas0')">保存</button>
+      <button onclick="confirmReset('canvas0')">リセット</button>
+    </div>
+  </div>
+</div>
 <div class="template-modal" id="templateModal"></div>
 <script>
 let canvases = [];
 let historyMap = new Map();
-const boxCount = 6;
-const templateImages = [
-  'https://your-github-repo.github.io/assets/template1.png',
-  'https://your-github-repo.github.io/assets/template2.png',
-  'https://your-github-repo.github.io/assets/template3.png'
-];
+const templateImages = ["./mnt/data/ee56675b-10c1-4a75-b71e-64cd0be50f0d.png","./mnt/data/2e2b364a-39cc-4aa6-860b-e1be1cef26d7.png","./mnt/data/5afccb61-3709-4292-a376-6fb75fd027f9.png","./mnt/data/fad70514-cbe0-45d0-a9a7-9ceb2c115382.png","./mnt/data/IMG_E9C26CA2CFBB-1.jpeg"];
 let currentCanvasIdForTemplate = null;
 
-function createBoxes() {
-  const container = document.getElementById('container');
-  container.innerHTML = '';
-  canvases = [];
+const canvas = new fabric.Canvas('canvas0', {
+  selection: false,
+  preserveObjectStacking: true
+});
+canvases.push(canvas);
+saveState(canvas);
 
-  for (let i = 0; i < boxCount; i++) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'box-wrapper';
-
-    const div = document.createElement('div');
-    div.className = 'box';
-    div.id = 'box' + i;
-
-    const canvasEl = document.createElement('canvas');
-    canvasEl.width = 370;
-    canvasEl.height = 320;
-    canvasEl.id = 'canvas' + i;
-    div.appendChild(canvasEl);
-    wrapper.appendChild(div);
-
-    const topControls = document.createElement('div');
-    topControls.className = 'top-controls';
-
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = 'image/*';
-    fileInput.onchange = (e) => handleFileSelect(e, canvasEl.id);
-
-    const templateBtn = document.createElement('button');
-    templateBtn.textContent = 'テンプレ';
-    templateBtn.onclick = () => showTemplateSelector(canvasEl.id);
-
-    topControls.appendChild(fileInput);
-    topControls.appendChild(templateBtn);
-    wrapper.appendChild(topControls);
-
-    const controls = document.createElement('div');
-    controls.className = 'controls';
-
-    const undoBtn = document.createElement('button');
-    undoBtn.textContent = '戻る';
-    undoBtn.onclick = () => undo(canvasEl.id);
-
-    const redoBtn = document.createElement('button');
-    redoBtn.textContent = '進む';
-    redoBtn.onclick = () => redo(canvasEl.id);
-
-    const saveBtn = document.createElement('button');
-    saveBtn.textContent = '保存';
-    saveBtn.onclick = () => saveImage(canvasEl.id);
-
-    const resetBtn = document.createElement('button');
-    resetBtn.textContent = 'リセット';
-    resetBtn.onclick = () => confirmReset(canvasEl.id);
-
-    controls.appendChild(undoBtn);
-    controls.appendChild(redoBtn);
-    controls.appendChild(saveBtn);
-    controls.appendChild(resetBtn);
-    wrapper.appendChild(controls);
-
-    container.appendChild(wrapper);
-
-    const fabricCanvas = new fabric.Canvas(canvasEl.id, {
-      selection: false,
-      preserveObjectStacking: true
-    });
-    canvases.push(fabricCanvas);
-    saveState(fabricCanvas);
-
-    fabricCanvas.on('mouse:down', function(opt) {
-      canvases.forEach(c => {
-        if (c !== fabricCanvas) {
-          c.discardActiveObject();
-          c.requestRenderAll();
-        }
-      });
-      if (opt.target) {
-        const active = fabricCanvas.getActiveObject();
-        const objs = fabricCanvas.getObjects();
-        const idx = objs.indexOf(opt.target);
-        if (active === opt.target) {
-          const next = objs.slice(0, idx).reverse().find(o => o.selectable);
-          if (next) {
-            fabricCanvas.setActiveObject(next);
-            next.bringToFront();
-          }
-        } else {
-          fabricCanvas.setActiveObject(opt.target);
-          opt.target.bringToFront();
-        }
-        fabricCanvas.requestRenderAll();
-      }
-    });
-
-    fabricCanvas.on('touch:gesture', function(opt) {
-      const obj = fabricCanvas.getActiveObject();
-      if (opt.e.touches && opt.e.touches.length === 2 && obj) {
-        const scale = opt.e.scale;
-        obj.scaleX *= scale;
-        obj.scaleY *= scale;
-        fabricCanvas.requestRenderAll();
-        saveState(fabricCanvas);
-      }
-      opt.e.preventDefault();
-    });
+canvas.on('mouse:down', function(opt) {
+  const objs = canvas.getObjects();
+  if (opt.target) {
+    const idx = objs.indexOf(opt.target);
+    const next = objs.slice(0, idx).reverse().find(o => o.selectable);
+    if (canvas.getActiveObject() === opt.target && next) {
+      canvas.setActiveObject(next);
+    } else {
+      canvas.setActiveObject(opt.target);
+    }
+    canvas.requestRenderAll();
   }
-}
+});
 
+canvas.on('touch:gesture', function(opt) {
+  const obj = canvas.getActiveObject();
+  if (!obj || !opt.e.touches || opt.e.touches.length !== 2) return;
+  const scale = opt.e.scale || 1;
+  obj.scaleX *= scale;
+  obj.scaleY *= scale;
+  canvas.requestRenderAll();
+  opt.e.preventDefault();
+});
 
 function handleFileSelect(e, canvasId) {
   const file = e.target.files[0];
@@ -193,20 +135,16 @@ function handleFileSelect(e, canvasId) {
   const reader = new FileReader();
   reader.onload = function(evt) {
     const imgSrc = evt.target.result;
-    const fabricCanvas = canvases.find(c => c.getElement().id === canvasId);
+    const canvas = canvases.find(c => c.getElement().id === canvasId);
     fabric.Image.fromURL(imgSrc, function(fabricImg) {
       const scale = Math.min(370 / fabricImg.width, 320 / fabricImg.height);
       fabricImg.set({
-        left: 0,
-        top: 0,
-        originX: 'left',
-        originY: 'top',
-        scaleX: scale,
-        scaleY: scale
+        left: 0, top: 0, originX: 'left', originY: 'top',
+        scaleX: scale, scaleY: scale
       });
-      fabricCanvas.add(fabricImg);
-      fabricCanvas.setActiveObject(fabricImg);
-      saveState(fabricCanvas);
+      canvas.add(fabricImg);
+      canvas.setActiveObject(fabricImg);
+      saveState(canvas);
     }, { crossOrigin: 'anonymous' });
   };
   reader.readAsDataURL(file);
@@ -216,7 +154,7 @@ function showTemplateSelector(canvasId) {
   currentCanvasIdForTemplate = canvasId;
   const modal = document.getElementById('templateModal');
   modal.innerHTML = '';
-  templateImages.forEach((src, index) => {
+  templateImages.forEach(src => {
     const img = document.createElement('img');
     img.src = src;
     img.onclick = () => insertTemplateImage(src);
@@ -230,18 +168,23 @@ function insertTemplateImage(src) {
   fabric.Image.fromURL(src, function(img) {
     const scale = Math.min(370 / img.width, 320 / img.height);
     img.set({
-      left: 0,
-      top: 0,
-      originX: 'left',
-      originY: 'top',
-      scaleX: scale,
-      scaleY: scale
+      left: 0, top: 0, originX: 'left', originY: 'top',
+      scaleX: scale, scaleY: scale
     });
     canvas.add(img);
     canvas.setActiveObject(img);
     saveState(canvas);
   }, { crossOrigin: 'anonymous' });
   document.getElementById('templateModal').style.display = 'none';
+}
+
+function deleteActiveObject(canvasId) {
+  const canvas = canvases.find(c => c.getElement().id === canvasId);
+  const obj = canvas.getActiveObject();
+  if (obj) {
+    canvas.remove(obj);
+    saveState(canvas);
+  }
 }
 
 function saveImage(canvasId) {
@@ -289,8 +232,6 @@ function confirmReset(canvasId) {
     saveState(canvas);
   }
 }
-
-createBoxes();
 </script>
 </body>
 </html>
