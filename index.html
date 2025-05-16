@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>画像編集ツール（iPhone対応）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+      background: #f0f0f0;
+    }
+    #container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+      margin: 10px;
+    }
+    .box {
+      border: 1px solid #ccc;
+      background: white;
+      width: 370px;
+      height: 320px;
+    }
+    .label {
+      margin-top: 5px;
+      text-align: center;
+    }
+    #imageHolder img {
+      width: 80px;
+      margin: 5px;
+      border: 1px solid #ccc;
+    }
+    #downloadLinks a {
+      display: block;
+      margin: 5px;
+    }
+    #toolbar {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="toolbar">
+  <input type="file" multiple accept="image/*" onchange="loadImages(event)">
+  <button onclick="resetAll()">リセット</button>
+  <button onclick="undo()">戻る</button>
+  <button onclick="redo()">進む</button>
+  <button onclick="saveAllImages()">保存</button>
+</div>
+
+<div id="imageHolder"></div>
+<div id="container"></div>
+<div id="downloadLinks"></div>
+
+<script>
+let canvases = [];
+let labelOffset = 0;
+const boxCount = 6;
+const historyMap = new Map();
+
+function createBoxes() {
+  const container = document.getElementById('container');
+  container.innerHTML = '';
+  canvases = [];
+
+  for (let i = 0; i < boxCount; i++) {
+    const wrapper = document.createElement('div');
+    wrapper.style.display = 'flex';
+    wrapper.style.flexDirection = 'column';
+    wrapper.style.alignItems = 'center';
+
+    const div = document.createElement('div');
+    div.className = 'box';
+    div.id = 'box' + i;
+
+    const canvasEl = document.createElement('canvas');
+    canvasEl.width = 370;
+    canvasEl.height = 320;
+    canvasEl.id = 'canvas' + i;
+    div.appendChild(canvasEl);
+    wrapper.appendChild(div);
+
+    const label = document.createElement('input');
+    label.className = 'label';
+    label.value = (i + 1 + labelOffset).toString();
+    wrapper.appendChild(label);
+    container.appendChild(wrapper);
+
+    const fabricCanvas = new fabric.Canvas(canvasEl.id, {
+      selection: false,
+      preserveObjectStacking: true
+    });
+    canvases.push(fabricCanvas);
+    saveState(fabricCanvas);
+
+    // タップで画像を追加する対応（iPhone対応）
+    div.addEventListener('click', () => {
+      const imgs = document.querySelectorAll('#imageHolder img');
+      imgs.forEach(img => {
+        img.onclick = () => {
+          fabric.Image.fromURL(img.src, function(fabricImg) {
+            fabricImg.set({
+              left: 0, top: 0,
+              originX: 'left', originY: 'top',
+              scaleX: 370 / fabricImg.width,
+              scaleY: 320 / fabricImg.height
+            });
+            fabricCanvas.add(fabricImg);
+            fabricCanvas.setActiveObject(fabricImg);
+            saveState(fabricCanvas);
+          }, { crossOrigin: 'anonymous' });
+        };
+      });
+    });
+
+    fabricCanvas.on('mouse:down', function(opt) {
+      canvases.forEach(c => {
+        if (c !== fabricCanvas) {
+          c.discardActiveObject();
+          c.requestRenderAll();
+        }
+      });
+      if (opt.target) {
+        fabricCanvas.setActiveObject(opt.target);
+        opt.target.bringToFront();
+      }
+    });
+
+    // キーボード削除対応（iPhoneでは使えないが一応残す）
+    window.addEventListener('keydown', function(e) {
+      if (e.key === 'Backspace') {
+        const active = fabricCanvas.getActiveObject();
+        if (active) {
+          fabricCanvas.remove(active);
+          saveState(fabricCanvas);
+        }
+      }
+    });
+  }
+}
+
+function loadImages(e) {
+  const files = e.target.files;
+  const holder = document.getElementById("imageHolder");
+  holder.innerHTML = "";
+  Array.from(files).forEach((file, i) => {
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      const img = document.createElement("img");
+      img.src = evt.target.result;
+      img.id = "img" + i;
+      holder.appendChild(img);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function resetAll() {
+  createBoxes();
+  document.getElementById('downloadLinks').innerHTML = '';
+}
+
+function saveAllImages() {
+  const linkContainer = document.getElementById('downloadLinks');
+  linkContainer.innerHTML = '';
+
+  canvases.forEach((fabricCanvas, i) => {
+    const canvasElement = fabricCanvas.getElement();
+    const wrapper = canvasElement.closest('div').parentElement;
+    const inputLabel = wrapper.querySelector('input.label');
+    const label = inputLabel ? inputLabel.value : `image${i + 1}`;
+
+    fabricCanvas.discardActiveObject();
+    fabricCanvas.clearContext(fabricCanvas.contextTop);
+    fabricCanvas.renderAll();
+
+    setTimeout(() => {
+      // toBlob fallback
+      if (canvasElement.toBlob) {
+        canvasElement.toBlob((blob) => {
+          if (!blob) return;
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${label}.png`;
+          a.textContent = `${label}.png を保存`;
+          linkContainer.appendChild(a);
+        }, 'image/png');
+      } else {
+        const dataURL = canvasElement.toDataURL('image/png');
+        const a = document.createElement('a');
+        a.href = dataURL;
+        a.download = `${label}.png`;
+        a.textContent = `${label}.png を保存`;
+        linkContainer.appendChild(a);
+      }
+    }, 200);
+  });
+}
+
+function saveState(canvas) {
+  const id = canvas.getElement().id;
+  if (!historyMap.has(id)) {
+    historyMap.set(id, { undo: [], redo: [] });
+  }
+  const state = canvas.toJSON();
+  historyMap.get(id).undo.push(state);
+  historyMap.get(id).redo = [];
+}
+
+function restoreState(type) {
+  canvases.forEach(canvas => {
+    const id = canvas.getElement().id;
+    const history = historyMap.get(id);
+    if (!history || !history[type].length) return;
+
+    const current = canvas.toJSON();
+    const state = history[type].pop();
+    if (type === 'undo') history.redo.push(current);
+    else history.undo.push(current);
+
+    canvas.loadFromJSON(state, () => canvas.renderAll());
+  });
+}
+
+function undo() { restoreState('undo'); }
+function redo() { restoreState('redo'); }
+
+createBoxes();
+</script>
+</body>
+</html>
