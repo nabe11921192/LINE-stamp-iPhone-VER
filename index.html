@@ -2,70 +2,64 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>画像編集ツール（iPhone対応）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iPhone対応画像エディタ</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <style>
     body {
-      margin: 0;
-      padding: 0;
+      margin: 0; padding: 0;
       font-family: sans-serif;
       background: #f0f0f0;
     }
-    #container {
+    .container {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 16px;
-      margin: 10px;
+      gap: 20px;
+      padding: 10px;
+    }
+    .box-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
     .box {
-      border: 1px solid #ccc;
-      background: white;
       width: 370px;
       height: 320px;
+      border: 1px solid #ccc;
+      background: white;
     }
     .label {
       margin-top: 5px;
-      text-align: center;
     }
-    #imageHolder img {
-      width: 80px;
-      margin: 5px;
-      border: 1px solid #ccc;
-    }
-    #downloadLinks a {
-      display: block;
-      margin: 5px;
-    }
-    #toolbar {
+    .controls {
       display: flex;
-      justify-content: center;
+      flex-direction: row;
       flex-wrap: wrap;
+      justify-content: center;
       gap: 10px;
-      margin: 10px;
+      margin-top: 20px;
+    }
+    .controls button, .controls input[type=file] {
+      padding: 6px 12px;
+      font-size: 14px;
     }
   </style>
 </head>
 <body>
 
-<div id="toolbar">
-  <input type="file" multiple accept="image/*" onchange="loadImages(event)">
-  <button onclick="resetAll()">リセット</button>
+<div class="container" id="container"></div>
+<div class="controls">
   <button onclick="undo()">戻る</button>
   <button onclick="redo()">進む</button>
   <button onclick="saveAllImages()">保存</button>
+  <button onclick="confirmReset()">リセット</button>
 </div>
-
-<div id="imageHolder"></div>
-<div id="container"></div>
-<div id="downloadLinks"></div>
 
 <script>
 let canvases = [];
-let labelOffset = 0;
+let historyMap = new Map();
 const boxCount = 6;
-const historyMap = new Map();
 
 function createBoxes() {
   const container = document.getElementById('container');
@@ -74,9 +68,7 @@ function createBoxes() {
 
   for (let i = 0; i < boxCount; i++) {
     const wrapper = document.createElement('div');
-    wrapper.style.display = 'flex';
-    wrapper.style.flexDirection = 'column';
-    wrapper.style.alignItems = 'center';
+    wrapper.className = 'box-wrapper';
 
     const div = document.createElement('div');
     div.className = 'box';
@@ -89,10 +81,12 @@ function createBoxes() {
     div.appendChild(canvasEl);
     wrapper.appendChild(div);
 
-    const label = document.createElement('input');
-    label.className = 'label';
-    label.value = (i + 1 + labelOffset).toString();
-    wrapper.appendChild(label);
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.onchange = (e) => handleFileSelect(e, canvasEl.id);
+    wrapper.appendChild(fileInput);
+
     container.appendChild(wrapper);
 
     const fabricCanvas = new fabric.Canvas(canvasEl.id, {
@@ -101,26 +95,6 @@ function createBoxes() {
     });
     canvases.push(fabricCanvas);
     saveState(fabricCanvas);
-
-    // タップで画像を追加する対応（iPhone対応）
-    div.addEventListener('click', () => {
-      const imgs = document.querySelectorAll('#imageHolder img');
-      imgs.forEach(img => {
-        img.onclick = () => {
-          fabric.Image.fromURL(img.src, function(fabricImg) {
-            fabricImg.set({
-              left: 0, top: 0,
-              originX: 'left', originY: 'top',
-              scaleX: 370 / fabricImg.width,
-              scaleY: 320 / fabricImg.height
-            });
-            fabricCanvas.add(fabricImg);
-            fabricCanvas.setActiveObject(fabricImg);
-            saveState(fabricCanvas);
-          }, { crossOrigin: 'anonymous' });
-        };
-      });
-    });
 
     fabricCanvas.on('mouse:down', function(opt) {
       canvases.forEach(c => {
@@ -134,76 +108,46 @@ function createBoxes() {
         opt.target.bringToFront();
       }
     });
-
-    // キーボード削除対応（iPhoneでは使えないが一応残す）
-    window.addEventListener('keydown', function(e) {
-      if (e.key === 'Backspace') {
-        const active = fabricCanvas.getActiveObject();
-        if (active) {
-          fabricCanvas.remove(active);
-          saveState(fabricCanvas);
-        }
-      }
-    });
   }
 }
 
-function loadImages(e) {
-  const files = e.target.files;
-  const holder = document.getElementById("imageHolder");
-  holder.innerHTML = "";
-  Array.from(files).forEach((file, i) => {
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-      const img = document.createElement("img");
-      img.src = evt.target.result;
-      img.id = "img" + i;
-      holder.appendChild(img);
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function resetAll() {
-  createBoxes();
-  document.getElementById('downloadLinks').innerHTML = '';
+function handleFileSelect(e, canvasId) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const imgSrc = evt.target.result;
+    const fabricCanvas = canvases.find(c => c.getElement().id === canvasId);
+    fabric.Image.fromURL(imgSrc, function(fabricImg) {
+      fabricImg.set({
+        left: 0,
+        top: 0,
+        originX: 'left',
+        originY: 'top',
+        scaleX: 370 / fabricImg.width,
+        scaleY: 320 / fabricImg.height
+      });
+      fabricCanvas.add(fabricImg);
+      fabricCanvas.setActiveObject(fabricImg);
+      saveState(fabricCanvas);
+    }, { crossOrigin: 'anonymous' });
+  };
+  reader.readAsDataURL(file);
 }
 
 function saveAllImages() {
-  const linkContainer = document.getElementById('downloadLinks');
-  linkContainer.innerHTML = '';
-
-  canvases.forEach((fabricCanvas, i) => {
-    const canvasElement = fabricCanvas.getElement();
-    const wrapper = canvasElement.closest('div').parentElement;
-    const inputLabel = wrapper.querySelector('input.label');
-    const label = inputLabel ? inputLabel.value : `image${i + 1}`;
-
-    fabricCanvas.discardActiveObject();
-    fabricCanvas.clearContext(fabricCanvas.contextTop);
-    fabricCanvas.renderAll();
-
-    setTimeout(() => {
-      // toBlob fallback
-      if (canvasElement.toBlob) {
-        canvasElement.toBlob((blob) => {
-          if (!blob) return;
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${label}.png`;
-          a.textContent = `${label}.png を保存`;
-          linkContainer.appendChild(a);
-        }, 'image/png');
-      } else {
-        const dataURL = canvasElement.toDataURL('image/png');
-        const a = document.createElement('a');
-        a.href = dataURL;
-        a.download = `${label}.png`;
-        a.textContent = `${label}.png を保存`;
-        linkContainer.appendChild(a);
-      }
-    }, 200);
+  canvases.forEach((canvas, i) => {
+    const label = 'image' + (i + 1);
+    canvas.discardActiveObject();
+    canvas.clearContext(canvas.contextTop);
+    canvas.renderAll();
+    canvas.getElement().toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = label + '.png';
+      a.click();
+    }, 'image/png');
   });
 }
 
@@ -222,18 +166,21 @@ function restoreState(type) {
     const id = canvas.getElement().id;
     const history = historyMap.get(id);
     if (!history || !history[type].length) return;
-
     const current = canvas.toJSON();
     const state = history[type].pop();
     if (type === 'undo') history.redo.push(current);
     else history.undo.push(current);
-
     canvas.loadFromJSON(state, () => canvas.renderAll());
   });
 }
 
 function undo() { restoreState('undo'); }
 function redo() { restoreState('redo'); }
+function confirmReset() {
+  if (confirm('すべての画像を消去しますか？')) {
+    createBoxes();
+  }
+}
 
 createBoxes();
 </script>
