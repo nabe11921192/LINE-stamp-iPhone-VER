@@ -20,7 +20,7 @@
     .container {
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: center; justify-content: center;
       height: 100%;
       padding: 5px;
       box-sizing: border-box;
@@ -28,7 +28,7 @@
     .box-wrapper {
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: center; justify-content: center;
       border: 1px solid #ccc;
       background: #fff;
       padding: 5px;
@@ -100,8 +100,8 @@
 let canvases = [];
 let historyMap = new Map();
 const templateImages = [
-  'https://your-github-repo.github.io/assets/template1.png',
-  'https://your-github-repo.github.io/assets/template2.png'
+  './mnt/data/ee56675b-10c1-4a75-b71e-64cd0be50f0d.png',
+  './mnt/data/2e2b364a-39cc-4aa6-860b-e1be1cef26d7.png'
 ];
 let currentCanvasIdForTemplate = null;
 
