@@ -3,58 +3,50 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>iPhone単枠画像エディタ</title>
+  <title>最終版エディタ</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <style>
     html, body {
       margin: 0; padding: 0;
       height: 100%;
-      font-family: sans-serif;
       background: #f0f0f0;
-      overscroll-behavior: none;
+      font-family: sans-serif;
       overflow: hidden;
       touch-action: none;
-      position: fixed;
-      width: 370px;
     }
     .container {
       display: flex;
       flex-direction: column;
-      align-items: center; justify-content: center;
+      align-items: center;
+      justify-content: start;
       height: 100%;
-      padding: 5px;
-      box-sizing: border-box;
-    }
-    .box-wrapper {
-      display: flex;
-      flex-direction: column;
-      align-items: center; justify-content: center;
-      border: 1px solid #ccc;
-      background: #fff;
-      padding: 5px;
-      flex-grow: 1;
-      width: 370px;
+      padding-top: 10px;
     }
     .box {
       width: 370px;
       height: 320px;
       border: 1px solid #ccc;
       background: white;
-      touch-action: none;
     }
     .controls, .top-controls {
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
       justify-content: center;
-      margin: 5px;
-    }
-    .controls button, .top-controls button {
-      padding: 6px 12px;
-      font-size: 14px;
+      margin-top: 8px;
     }
     input[type="file"] {
       display: none;
+    }
+    label {
+      background: #ccc;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button {
+      padding: 6px 12px;
+      font-size: 14px;
     }
     .template-modal {
       position: fixed;
@@ -63,7 +55,7 @@
       background: white;
       border: 1px solid #ccc;
       padding: 20px;
-      z-index: 100;
+      z-index: 999;
       display: none;
       flex-direction: column;
       gap: 10px;
@@ -76,34 +68,31 @@
 </head>
 <body>
 <div class="container">
-  <div class="box-wrapper">
-    <div class="box">
-      <canvas id="canvas0" width="370" height="320"></canvas>
-    </div>
-    <div class="top-controls">
-      <label style="background:#ccc;padding:6px 12px;border-radius:4px;cursor:pointer;">
-        画像選択
-        <input type="file" accept="image/*" onchange="handleFileSelect(event, 'canvas0')">
-      </label>
-      <button onclick="showTemplateSelector('canvas0')">テンプレ</button>
-    </div>
-    <div class="controls">
-      <button onclick="undo('canvas0')">戻る</button>
-      <button onclick="redo('canvas0')">進む</button>
-      <button onclick="saveImage('canvas0')">保存</button>
-      <button onclick="confirmReset('canvas0')">リセット</button>
-    </div>
+  <div class="box"><canvas id="canvas0" width="370" height="320"></canvas></div>
+  <div class="top-controls">
+    <label>画像選択<input type="file" accept="image/*" onchange="handleFileSelect(event, 'canvas0')"></label>
+    <button onclick="showTemplateSelector('canvas0')">テンプレ</button>
+    <button onclick="deleteActiveObject('canvas0')">削除</button>
+  </div>
+  <div class="controls">
+    <button onclick="undo('canvas0')">戻る</button>
+    <button onclick="redo('canvas0')">進む</button>
+    <button onclick="saveImage('canvas0')">保存</button>
+    <button onclick="confirmReset('canvas0')">リセット</button>
   </div>
 </div>
 <div class="template-modal" id="templateModal"></div>
 <script>
 let canvases = [];
 let historyMap = new Map();
-const templateImages = [
-  './mnt/data/ee56675b-10c1-4a75-b71e-64cd0be50f0d.png',
-  './mnt/data/2e2b364a-39cc-4aa6-860b-e1be1cef26d7.png'
-];
 let currentCanvasIdForTemplate = null;
+const templateImages = [
+  "./mnt/data/ee56675b-10c1-4a75-b71e-64cd0be50f0d.png",
+  "./mnt/data/2e2b364a-39cc-4aa6-860b-e1be1cef26d7.png",
+  "./mnt/data/5afccb61-3709-4292-a376-6fb75fd027f9.png",
+  "./mnt/data/fad70514-cbe0-45d0-a9a7-9ceb2c115382.png",
+  "./mnt/data/IMG_E9C26CA2CFBB-1.jpeg"
+];
 
 const canvas = new fabric.Canvas('canvas0', {
   selection: true,
@@ -112,14 +101,7 @@ const canvas = new fabric.Canvas('canvas0', {
 canvases.push(canvas);
 saveState(canvas);
 
-// 選択されたオブジェクトをそのまま前面に出す（後ろに行かない）
-canvas.on('mouse:down', function(opt) {
-  if (opt.target) {
-    canvas.setActiveObject(opt.target);
-    canvas.requestRenderAll();
-  }
-});
-
+// ピンチ対応
 let lastScale = 1;
 canvas.on('touch:gesture', function(opt) {
   const obj = canvas.getActiveObject();
@@ -132,25 +114,27 @@ canvas.on('touch:gesture', function(opt) {
   opt.e.preventDefault();
 });
 
+// 重なり画像選択切替
+canvas.on('mouse:down', function(opt) {
+  if (opt.target) {
+    const objs = canvas.getObjects();
+    const idx = objs.indexOf(opt.target);
+    const next = objs.slice(0, idx).reverse().find(o => o.selectable);
+    canvas.setActiveObject(next || opt.target);
+    canvas.requestRenderAll();
+  }
+});
+
 function handleFileSelect(e, canvasId) {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = function(evt) {
-    const imgSrc = evt.target.result;
-    const canvas = canvases.find(c => c.getElement().id === canvasId);
-    fabric.Image.fromURL(imgSrc, function(fabricImg) {
-      const scale = Math.min(360 / fabricImg.width, 600 / fabricImg.height);
-      fabricImg.set({
-        left: 0,
-        top: 0,
-        originX: 'left',
-        originY: 'top',
-        scaleX: scale,
-        scaleY: scale
-      });
-      canvas.add(fabricImg);
-      canvas.setActiveObject(fabricImg);
+    fabric.Image.fromURL(evt.target.result, function(img) {
+      const scale = Math.min(370 / img.width, 320 / img.height);
+      img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale });
+      canvas.add(img);
+      canvas.setActiveObject(img);
       saveState(canvas);
     }, { crossOrigin: 'anonymous' });
   };
@@ -171,17 +155,9 @@ function showTemplateSelector(canvasId) {
 }
 
 function insertTemplateImage(src) {
-  const canvas = canvases.find(c => c.getElement().id === currentCanvasIdForTemplate);
   fabric.Image.fromURL(src, function(img) {
-    const scale = Math.min(360 / img.width, 600 / img.height);
-    img.set({
-      left: 0,
-      top: 0,
-      originX: 'left',
-      originY: 'top',
-      scaleX: scale,
-      scaleY: scale
-    });
+    const scale = Math.min(370 / img.width, 320 / img.height);
+    img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale });
     canvas.add(img);
     canvas.setActiveObject(img);
     saveState(canvas);
@@ -189,8 +165,16 @@ function insertTemplateImage(src) {
   document.getElementById('templateModal').style.display = 'none';
 }
 
-function saveImage(canvasId) {
+function deleteActiveObject(canvasId) {
   const canvas = canvases.find(c => c.getElement().id === canvasId);
+  const active = canvas.getActiveObject();
+  if (active) {
+    canvas.remove(active);
+    saveState(canvas);
+  }
+}
+
+function saveImage(canvasId) {
   canvas.discardActiveObject();
   canvas.clearContext(canvas.contextTop);
   canvas.renderAll();
