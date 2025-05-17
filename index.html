@@ -3,17 +3,18 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>レイヤー付き画像エディタ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>画像エディタ修正版＋レイヤー機能</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://code.jquery.com/ui/1.13.0/jquery-ui.min.js"></script>
   <style>
     html, body {
-      margin: 0; padding: 0;
-      height: 100%; overflow: hidden;
+      margin: 0; padding: 0; height: 100%;
+      background: #f0f0f0;
+      overflow: hidden;
+      touch-action: none;
       font-family: sans-serif;
-      background-color: #f0f0f0;
     }
     .container {
       display: flex;
@@ -24,12 +25,35 @@
     .box {
       width: 370px;
       height: 320px;
-      border: 1px solid #ccc;
       background: white;
-      position: relative;
+      border: 1px solid #ccc;
     }
-    canvas {
-      border: none;
+    .top-controls, .controls {
+      margin-top: 10px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    input[type="file"] {
+      display: none;
+    }
+    .template-modal {
+      display: none;
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border: 1px solid #ccc;
+      padding: 20px;
+      z-index: 1000;
+      flex-wrap: wrap;
+      gap: 10px;
+      max-width: 90vw;
+    }
+    .template-modal img {
+      width: 80px;
+      cursor: pointer;
     }
     #layerPanel {
       position: fixed;
@@ -60,15 +84,40 @@
   <div class="box">
     <canvas id="canvas0" width="370" height="320"></canvas>
   </div>
-  <input type="file" id="imgInput" accept="image/*" />
+  <div class="top-controls">
+    <label style="background:#ccc;padding:6px 12px;border-radius:4px;cursor:pointer;">
+      画像選択<input type="file" id="imgInput" accept="image/*">
+    </label>
+    <button onclick="showTemplateSelector('canvas0')">テンプレ</button>
+    <button onclick="deleteActiveObject('canvas0')">削除</button>
+  </div>
+  <div class="controls">
+    <button onclick="undo('canvas0')">戻る</button>
+    <button onclick="redo('canvas0')">進む</button>
+    <button onclick="saveImage('canvas0')">保存</button>
+    <button onclick="confirmReset('canvas0')">リセット</button>
+  </div>
 </div>
+<div class="template-modal" id="templateModal"></div>
 <div id="layerPanel"></div>
 
 <script>
-const canvas = new fabric.Canvas('canvas0', {
-  preserveObjectStacking: true
-});
+let canvases = [];
+let historyMap = new Map();
 let layers = [];
+const canvas = new fabric.Canvas('canvas0', { preserveObjectStacking: true });
+canvases.push(canvas);
+saveState(canvas);
+
+const templateImages = [
+  "https://nabe11921192.github.io/assets/template1.png",
+  "https://nabe11921192.github.io/assets/template2.png",
+  "https://nabe11921192.github.io/assets/template3.png",
+  "https://nabe11921192.github.io/assets/template4.png",
+  "https://nabe11921192.github.io/assets/template5.png",
+  "https://nabe11921192.github.io/assets/template6.png"
+];
+let currentCanvasIdForTemplate = null;
 
 document.getElementById('imgInput').addEventListener('change', function(e) {
   const file = e.target.files[0];
@@ -78,7 +127,7 @@ document.getElementById('imgInput').addEventListener('change', function(e) {
     fabric.Image.fromURL(evt.target.result, function(img) {
       const scale = Math.min(370 / img.width, 320 / img.height);
       img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: false });
-      canvas.insertAt(img, 0, false);  // 背面に追加
+      canvas.insertAt(img, 0, false); // 背面に追加
       layers.unshift(img);
       addLayerThumb(img, evt.target.result);
       canvas.requestRenderAll();
@@ -93,7 +142,6 @@ function addLayerThumb(obj, src) {
   thumb.className = 'layer-thumb';
   thumb.onclick = function() {
     layers.forEach(o => o.selectable = false);
-    layers.forEach(o => o.set({ borderColor: 'black' }));
     obj.selectable = true;
     canvas.setActiveObject(obj);
     document.querySelectorAll('.layer-thumb').forEach(t => t.classList.remove('active'));
@@ -106,7 +154,7 @@ function addLayerThumb(obj, src) {
 $("#layerPanel").sortable({
   update: function(event, ui) {
     const newOrder = Array.from(document.querySelectorAll(".layer-thumb"));
-    const newLayers = newOrder.map((el, i) => layers.find(o => el.src.includes(o._element?.src)));
+    const newLayers = newOrder.map(el => layers.find(o => el.src.includes(o._element?.src)));
     layers = newLayers.filter(Boolean);
     canvas.clear();
     for (let i = layers.length - 1; i >= 0; i--) {
@@ -115,6 +163,93 @@ $("#layerPanel").sortable({
     canvas.requestRenderAll();
   }
 });
+
+function showTemplateSelector(canvasId) {
+  currentCanvasIdForTemplate = canvasId;
+  const modal = document.getElementById('templateModal');
+  modal.innerHTML = '';
+  templateImages.forEach(src => {
+    const img = document.createElement('img');
+    img.src = src;
+    img.onclick = () => insertTemplateImage(src);
+    modal.appendChild(img);
+  });
+  modal.style.display = 'flex';
+}
+
+function insertTemplateImage(src) {
+  fabric.Image.fromURL(src, function(img) {
+    const scale = Math.min(370 / img.width, 320 / img.height);
+    img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: false });
+    canvas.insertAt(img, 0, false);
+    layers.unshift(img);
+    addLayerThumb(img, src);
+    canvas.requestRenderAll();
+  }, { crossOrigin: 'anonymous' });
+  document.getElementById('templateModal').style.display = 'none';
+}
+
+function deleteActiveObject(canvasId) {
+  const canvas = canvases.find(c => c.getElement().id === canvasId);
+  const obj = canvas.getActiveObject();
+  if (obj) {
+    canvas.remove(obj);
+    layers = layers.filter(o => o !== obj);
+    const thumbs = document.querySelectorAll('.layer-thumb');
+    thumbs.forEach(t => {
+      if (obj._element && t.src.includes(obj._element.src)) t.remove();
+    });
+    saveState(canvas);
+  }
+}
+
+function saveImage(canvasId) {
+  const canvas = canvases.find(c => c.getElement().id === canvasId);
+  canvas.discardActiveObject();
+  canvas.clearContext(canvas.contextTop);
+  canvas.renderAll();
+  canvas.getElement().toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = canvasId + '.png';
+    a.click();
+  }, 'image/png');
+}
+
+function saveState(canvas) {
+  const id = canvas.getElement().id;
+  if (!historyMap.has(id)) {
+    historyMap.set(id, { undo: [], redo: [] });
+  }
+  const state = canvas.toJSON();
+  historyMap.get(id).undo.push(state);
+  historyMap.get(id).redo = [];
+}
+
+function restoreState(canvasId, type) {
+  const canvas = canvases.find(c => c.getElement().id === canvasId);
+  const history = historyMap.get(canvasId);
+  if (!history || !history[type].length) return;
+  const current = canvas.toJSON();
+  const state = history[type].pop();
+  if (type === 'undo') history.redo.push(current);
+  else history.undo.push(current);
+  canvas.loadFromJSON(state, () => canvas.renderAll());
+}
+
+function undo(canvasId) { restoreState(canvasId, 'undo'); }
+function redo(canvasId) { restoreState(canvasId, 'redo'); }
+
+function confirmReset(canvasId) {
+  if (confirm('この枠の画像をすべて消去しますか？')) {
+    const canvas = canvases.find(c => c.getElement().id === canvasId);
+    canvas.clear();
+    document.getElementById('layerPanel').innerHTML = '';
+    layers = [];
+    saveState(canvas);
+  }
+}
 </script>
 </body>
 </html>
