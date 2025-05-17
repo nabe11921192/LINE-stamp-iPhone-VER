@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>修正版：画像エディタ完全版</title>
+  <title>画像エディタ改修版</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
@@ -34,14 +34,13 @@
       gap: 10px;
       margin: 10px 0;
       background: rgba(255,255,255,0.95);
-      padding: 5px;
+      padding: 8px;
       border: 1px solid #aaa;
       overflow-x: auto;
-      touch-action: auto;
     }
     .layer-thumb {
-      width: 50px;
-      height: 50px;
+      width: 60px;
+      height: 60px;
       border: 2px solid gray;
       object-fit: cover;
       cursor: pointer;
@@ -50,19 +49,17 @@
     .layer-thumb.active {
       border-color: red;
     }
-    .sortable-chosen {
-      opacity: 0.6;
-    }
-    .sortable-ghost {
-      border: 2px dashed #999;
-      background: #eee;
-    }
     .top-controls, .controls {
       margin-top: 10px;
       display: flex;
-      gap: 10px;
+      gap: 15px;
       justify-content: center;
       flex-wrap: wrap;
+    }
+    .top-controls button,
+    .controls button {
+      font-size: 16px;
+      padding: 8px 12px;
     }
     input[type="file"] {
       display: none;
@@ -93,10 +90,11 @@
   </div>
   <div id="layerPanel"></div>
   <div class="top-controls">
-    <label style="background:#ccc;padding:6px 12px;border-radius:4px;cursor:pointer;">
-      画像選択<input type="file" id="imgInput" accept="image/*">
+    <label style="background:#ccc;padding:8px 16px;border-radius:4px;cursor:pointer;">
+      画像選択<input type="file" id="imgInput" accept="image/*" multiple>
     </label>
     <button onclick="showTemplateSelector('canvas0')">テンプレ</button>
+    <button onclick="copyActiveObject()">コピー</button>
     <button onclick="deleteActiveObject('canvas0')">削除</button>
   </div>
   <div class="controls">
@@ -128,24 +126,23 @@ const templateImages = [
   "https://nabe11921192.github.io/assets/template6.png"
 ];
 
-let currentCanvasIdForTemplate = null;
-
 document.getElementById('imgInput').addEventListener('change', function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(evt) {
-    fabric.Image.fromURL(evt.target.result, function(img) {
-      const scale = Math.min(370 / img.width, 320 / img.height);
-      img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: true });
-      canvas.insertAt(img, 0, false);
-      layers.unshift(img);
-      addLayerThumb(img, evt.target.result);
-      canvas.setActiveObject(img);
-      canvas.requestRenderAll();
-    }, { crossOrigin: 'anonymous' });
-  };
-  reader.readAsDataURL(file);
+  const files = Array.from(e.target.files);
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      fabric.Image.fromURL(evt.target.result, function(img) {
+        const scale = Math.min(370 / img.width, 320 / img.height);
+        img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: true });
+        layers.push(img);  // ← 右が奥、左が手前になるよう逆順で保持
+        canvas.add(img);
+        addLayerThumb(img, evt.target.result);
+        canvas.setActiveObject(img);
+        canvas.requestRenderAll();
+      }, { crossOrigin: 'anonymous' });
+    };
+    reader.readAsDataURL(file);
+  });
 });
 
 function addLayerThumb(obj, src) {
@@ -155,34 +152,37 @@ function addLayerThumb(obj, src) {
   thumb.addEventListener('click', () => {
     layers.forEach(o => o.selectable = false);
     obj.selectable = true;
-    obj.bringToFront();
     canvas.setActiveObject(obj);
+    canvas.requestRenderAll();
     document.querySelectorAll('.layer-thumb').forEach(t => t.classList.remove('active'));
     thumb.classList.add('active');
-    canvas.requestRenderAll();
   });
-  document.getElementById('layerPanel').prepend(thumb);
+  document.getElementById('layerPanel').appendChild(thumb); // 右が奥
 }
 
-new Sortable(document.getElementById('layerPanel'), {
-  animation: 150,
-  ghostClass: 'sortable-ghost',
-  onUpdate: function () {
-    const newOrder = Array.from(document.querySelectorAll(".layer-thumb"));
-    const newLayers = newOrder.map(el =>
-      layers.find(o => o._element && el.src.includes(o._element.src))
-    );
-    layers = newLayers.filter(Boolean);
-    canvas.clear();
-    for (let i = layers.length - 1; i >= 0; i--) {
-      canvas.add(layers[i]);
-    }
-    canvas.requestRenderAll();
+function updateLayerOrder() {
+  canvas.clear();
+  for (let i = 0; i < layers.length; i++) {
+    canvas.add(layers[i]);
   }
-});
+  canvas.requestRenderAll();
+}
+
+function copyActiveObject() {
+  const obj = canvas.getActiveObject();
+  if (obj) {
+    obj.clone(cloned => {
+      cloned.set({ left: obj.left + 10, top: obj.top + 10 });
+      layers.push(cloned); // 最背面に追加
+      canvas.add(cloned);
+      addLayerThumb(cloned, cloned._element.src);
+      canvas.setActiveObject(cloned);
+      canvas.requestRenderAll();
+    });
+  }
+}
 
 function showTemplateSelector(canvasId) {
-  currentCanvasIdForTemplate = canvasId;
   const modal = document.getElementById('templateModal');
   modal.innerHTML = '';
   templateImages.forEach(src => {
@@ -198,8 +198,8 @@ function insertTemplateImage(src) {
   fabric.Image.fromURL(src, function(img) {
     const scale = Math.min(370 / img.width, 320 / img.height);
     img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: true });
-    canvas.insertAt(img, 0, false);
-    layers.unshift(img);
+    layers.push(img);
+    canvas.add(img);
     addLayerThumb(img, src);
     canvas.setActiveObject(img);
     canvas.requestRenderAll();
@@ -218,6 +218,7 @@ function deleteActiveObject(canvasId) {
       if (obj._element && t.src.includes(obj._element.src)) t.remove();
     });
     saveState(canvas);
+    updateLayerOrder();
   }
 }
 
