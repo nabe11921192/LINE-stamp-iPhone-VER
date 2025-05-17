@@ -4,90 +4,43 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>完全修正版 画像エディタ</title>
+  <title>画像エディタ - 重複画像・コピー修正</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <style>
     html, body {
       margin: 0; padding: 0;
-      background: #f0f0f0;
       font-family: sans-serif;
+      background: #f0f0f0;
       touch-action: manipulation;
     }
-    .container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 10px;
-    }
-    .box {
-      width: 370px;
-      height: 320px;
-      background: white;
-      border: 1px solid #ccc;
-      overflow: hidden;
-    }
+    .container { display: flex; flex-direction: column; align-items: center; padding: 10px; }
+    .box { width: 370px; height: 320px; background: white; border: 1px solid #ccc; overflow: hidden; }
     #layerPanel {
-      display: flex;
-      gap: 8px;
-      margin: 10px 0;
-      padding: 6px;
-      border: 1px solid #aaa;
-      background: rgba(255,255,255,0.95);
-      overflow-x: auto;
+      display: flex; gap: 8px; margin: 10px 0; padding: 6px;
+      border: 1px solid #aaa; background: rgba(255,255,255,0.95); overflow-x: auto;
     }
     .layer-thumb {
-      width: 60px;
-      height: 60px;
+      width: 60px; height: 60px;
       border: 2px solid gray;
       object-fit: cover;
       cursor: grab;
       user-select: none;
       touch-action: none;
-    }
-    .layer-thumb.active {
-      border: 2px solid red;
-    }
-    .sortable-ghost {
-      border: 2px dashed #999;
-      background: #ddd;
-    }
-    .top-controls, .controls {
-      margin-top: 10px;
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    input[type="file"] {
-      display: none;
-    }
-    .template-modal {
-      display: none;
-      position: fixed;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
       background: white;
-      border: 1px solid #ccc;
-      padding: 20px;
-      z-index: 1000;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      max-width: 90vw;
     }
-    .template-modal img {
-      width: 80px;
-      cursor: pointer;
+    .layer-thumb.active { border: 2px solid red; }
+    .sortable-ghost { border: 2px dashed #999; background: #ddd; }
+    .top-controls, .controls {
+      margin-top: 10px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;
     }
+    input[type="file"] { display: none; }
   </style>
 </head>
 <body>
 <div class="container">
-  <div class="box">
-    <canvas id="canvas0" width="370" height="320"></canvas>
-  </div>
+  <div class="box"><canvas id="canvas0" width="370" height="320"></canvas></div>
   <div id="layerPanel"></div>
   <div class="top-controls">
     <label style="background:#ccc;padding:8px 16px;border-radius:4px;cursor:pointer;">
@@ -95,53 +48,63 @@
     </label>
     <button onclick="showTemplateSelector()">テンプレ</button>
     <button onclick="copyActiveObject()">コピー</button>
-    <button onclick="deleteActiveObject('canvas0')">削除</button>
+    <button onclick="deleteActiveObject()">削除</button>
   </div>
   <div class="controls">
-    <button onclick="undo('canvas0')">戻る</button>
-    <button onclick="redo('canvas0')">進む</button>
-    <button onclick="saveImage('canvas0')">保存</button>
-    <button onclick="confirmReset('canvas0')">リセット</button>
+    <button onclick="undo()">戻る</button>
+    <button onclick="redo()">進む</button>
+    <button onclick="saveImage()">保存</button>
+    <button onclick="resetCanvas()">リセット</button>
   </div>
 </div>
 <div class="template-modal" id="templateModal"></div>
 
 <script>
-let canvases = [], historyMap = new Map(), layers = [];
 const canvas = new fabric.Canvas('canvas0', {
   preserveObjectStacking: true,
   selection: true
 });
-canvases.push(canvas);
-saveState(canvas);
+let layers = [];
+let history = [];
 
-function reorderCanvas() {
-  canvas.clear();
-  for (let i = 0; i < layers.length; i++) {
-    canvas.add(layers[i]);
+function saveState() {
+  history.push(JSON.stringify(canvas));
+}
+
+function undo() {
+  if (history.length > 1) {
+    history.pop();
+    canvas.loadFromJSON(history[history.length - 1], () => canvas.renderAll());
   }
+}
+
+function redo() {
+  // optional: implement redo stack
+}
+
+function addImageToCanvas(img, src) {
+  const scale = Math.min(370 / img.width, 320 / img.height);
+  img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: true });
+  canvas.add(img);
+  layers.push(img);
+  addLayerThumb(img, src);
+  canvas.setActiveObject(img);
+  saveState();
   canvas.requestRenderAll();
 }
 
-document.getElementById('imgInput').addEventListener('change', function(e) {
-  const files = Array.from(e.target.files);
-  files.forEach(file => {
+function handleFileSelect(files) {
+  [...files].forEach(file => {
     const reader = new FileReader();
-    reader.onload = function(evt) {
-      fabric.Image.fromURL(evt.target.result, function(img) {
-        const scale = Math.min(370 / img.width, 320 / img.height);
-        img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: true });
-        layers.push(img);
-        canvas.add(img);
-        addLayerThumb(img, evt.target.result);
-        canvas.setActiveObject(img);
-        saveState(canvas);
-        canvas.requestRenderAll();
-      }, { crossOrigin: 'anonymous' });
+    reader.onload = e => {
+      const dataURL = e.target.result + '?' + new Date().getTime(); // force unique
+      fabric.Image.fromURL(dataURL, img => addImageToCanvas(img, dataURL));
     };
     reader.readAsDataURL(file);
   });
-});
+}
+
+document.getElementById('imgInput').addEventListener('change', e => handleFileSelect(e.target.files));
 
 function addLayerThumb(obj, src) {
   const thumb = document.createElement('img');
@@ -149,135 +112,103 @@ function addLayerThumb(obj, src) {
   thumb.className = 'layer-thumb';
   thumb.ondragstart = e => e.preventDefault();
   thumb.ontouchstart = e => e.preventDefault();
-  thumb.addEventListener('click', () => {
+  thumb.onclick = () => {
     layers.forEach(o => o.selectable = false);
     obj.selectable = true;
     canvas.setActiveObject(obj);
     document.querySelectorAll('.layer-thumb').forEach(t => t.classList.remove('active'));
     thumb.classList.add('active');
-    saveState(canvas);
     canvas.requestRenderAll();
-  });
+  };
   document.getElementById('layerPanel').appendChild(thumb);
 }
 
-new Sortable(document.getElementById('layerPanel'), {
+new Sortable(layerPanel, {
   animation: 150,
   ghostClass: 'sortable-ghost',
-  onEnd: function () {
-    const newOrder = Array.from(document.querySelectorAll(".layer-thumb"));
+  onEnd: () => {
+    const newOrder = Array.from(document.querySelectorAll('.layer-thumb'));
     layers = newOrder.map(el => layers.find(o => o._element && el.src.includes(o._element.src)));
-    reorderCanvas();
+    canvas.clear();
+    layers.forEach(o => canvas.add(o));
+    canvas.requestRenderAll();
   }
 });
 
 function copyActiveObject() {
-  const obj = canvas.getActiveObject();
-  if (obj) {
-    obj.clone(cloned => {
-      cloned.set({ left: obj.left + 10, top: obj.top + 10 });
-      layers.push(cloned);
-      canvas.add(cloned);
-      addLayerThumb(cloned, cloned._element.src);
-      canvas.setActiveObject(cloned);
-      saveState(canvas);
-      canvas.requestRenderAll();
+  const active = canvas.getActiveObject();
+  if (active) {
+    active.clone(clone => {
+      clone.set({ left: active.left + 10, top: active.top + 10 });
+      fabric.util.loadImage(clone._element.src, (img) => {
+        const newImg = new fabric.Image(img, {
+          left: clone.left,
+          top: clone.top,
+          scaleX: clone.scaleX,
+          scaleY: clone.scaleY,
+          selectable: true
+        });
+        addImageToCanvas(newImg, clone._element.src + '?' + new Date().getTime());
+      });
     });
   }
 }
 
-function showTemplateSelector() {
-  const modal = document.getElementById('templateModal');
-  modal.innerHTML = '';
-  const templateImages = [
-    "https://nabe11921192.github.io/assets/template1.png",
-    "https://nabe11921192.github.io/assets/template2.png",
-    "https://nabe11921192.github.io/assets/template3.png"
-  ];
-  templateImages.forEach(src => {
-    const img = document.createElement('img');
-    img.src = src;
-    img.onclick = () => insertTemplateImage(src);
-    modal.appendChild(img);
+function deleteActiveObject() {
+  const obj = canvas.getActiveObject();
+  if (!obj) return;
+  canvas.remove(obj);
+  layers = layers.filter(o => o !== obj);
+  const thumbs = document.querySelectorAll('.layer-thumb');
+  thumbs.forEach(t => {
+    if (obj._element && t.src.includes(obj._element.src)) t.remove();
   });
-  modal.style.display = 'flex';
+  saveState();
+  canvas.requestRenderAll();
 }
 
-function insertTemplateImage(src) {
-  fabric.Image.fromURL(src, function(img) {
-    const scale = Math.min(370 / img.width, 320 / img.height);
-    img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: true });
-    layers.push(img);
-    canvas.add(img);
-    addLayerThumb(img, src);
-    canvas.setActiveObject(img);
-    saveState(canvas);
-    canvas.requestRenderAll();
-  }, { crossOrigin: 'anonymous' });
-  document.getElementById('templateModal').style.display = 'none';
-}
-
-function deleteActiveObject(canvasId) {
-  const canvas = canvases.find(c => c.getElement().id === canvasId);
-  const obj = canvas.getActiveObject();
-  if (obj) {
-    canvas.remove(obj);
-    layers = layers.filter(o => o !== obj);
-    document.querySelectorAll('.layer-thumb').forEach(t => {
-      if (obj._element && t.src.includes(obj._element.src)) t.remove();
-    });
-    saveState(canvas);
-    reorderCanvas();
-  }
-}
-
-function saveImage(canvasId) {
-  const canvas = canvases.find(c => c.getElement().id === canvasId);
+function saveImage() {
   canvas.discardActiveObject();
-  canvas.clearContext(canvas.contextTop);
   canvas.renderAll();
   canvas.getElement().toBlob(blob => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = canvasId + '.png';
+    a.download = 'output.png';
     a.click();
   }, 'image/png');
 }
 
-function saveState(canvas) {
-  const id = canvas.getElement().id;
-  if (!historyMap.has(id)) {
-    historyMap.set(id, { undo: [], redo: [] });
-  }
-  const state = canvas.toJSON();
-  historyMap.get(id).undo.push(state);
-  historyMap.get(id).redo = [];
-}
-
-function restoreState(canvasId, type) {
-  const canvas = canvases.find(c => c.getElement().id === canvasId);
-  const history = historyMap.get(canvasId);
-  if (!history || !history[type].length) return;
-  const current = canvas.toJSON();
-  const state = history[type].pop();
-  if (type === 'undo') history.redo.push(current);
-  else history.undo.push(current);
-  canvas.loadFromJSON(state, () => canvas.renderAll());
-}
-
-function undo(canvasId) { restoreState(canvasId, 'undo'); }
-function redo(canvasId) { restoreState(canvasId, 'redo'); }
-
-function confirmReset(canvasId) {
-  if (confirm('この枠の画像をすべて消去しますか？')) {
-    const canvas = canvases.find(c => c.getElement().id === canvasId);
+function resetCanvas() {
+  if (confirm('すべての画像を削除しますか？')) {
     canvas.clear();
-    document.getElementById('layerPanel').innerHTML = '';
     layers = [];
-    saveState(canvas);
+    document.getElementById('layerPanel').innerHTML = '';
+    saveState();
   }
 }
+
+function showTemplateSelector() {
+  const modal = document.getElementById('templateModal');
+  const templates = [
+    "https://nabe11921192.github.io/assets/template1.png",
+    "https://nabe11921192.github.io/assets/template2.png",
+    "https://nabe11921192.github.io/assets/template3.png"
+  ];
+  modal.innerHTML = '';
+  templates.forEach(src => {
+    const img = document.createElement('img');
+    img.src = src;
+    img.onclick = () => {
+      fabric.Image.fromURL(src + '?' + new Date().getTime(), imgObj => addImageToCanvas(imgObj, src));
+      modal.style.display = 'none';
+    };
+    modal.appendChild(img);
+  });
+  modal.style.display = 'flex';
+}
+
+saveState();
 </script>
 </body>
 </html>
