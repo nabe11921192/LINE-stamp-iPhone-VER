@@ -74,9 +74,7 @@
     <button onclick="confirmReset('canvas0')">リセット</button>
   </div>
 </div>
-
 <div class="template-modal" id="templateModal"></div>
-
 <script>
 let canvases = [];
 let historyMap = new Map();
@@ -97,7 +95,6 @@ const canvas = new fabric.Canvas('canvas0', {
 canvases.push(canvas);
 saveState(canvas);
 
-// ✅ 修正点：クリックした画像を最前面にし、下の画像が勝手に選ばれないように
 canvas.on('mouse:down', function(opt) {
   if (opt.target) {
     canvas.setActiveObject(opt.target);
@@ -106,7 +103,6 @@ canvas.on('mouse:down', function(opt) {
   }
 });
 
-// ピンチズーム対応（スマホ用）
 let touchStartDist = 0;
 canvas.getElement().addEventListener('touchmove', function(e) {
   if (e.touches.length === 2) {
@@ -134,7 +130,6 @@ canvas.getElement().addEventListener('touchend', function() {
   touchStartDist = 0;
 });
 
-// 画像読み込み
 function handleFileSelect(e, canvasId) {
   const file = e.target.files[0];
   if (!file) return;
@@ -156,7 +151,6 @@ function handleFileSelect(e, canvasId) {
   reader.readAsDataURL(file);
 }
 
-// テンプレート表示
 function showTemplateSelector(canvasId) {
   currentCanvasIdForTemplate = canvasId;
   const modal = document.getElementById('templateModal');
@@ -185,7 +179,6 @@ function insertTemplateImage(src) {
   document.getElementById('templateModal').style.display = 'none';
 }
 
-// 選択画像削除
 function deleteActiveObject(canvasId) {
   const canvas = canvases.find(c => c.getElement().id === canvasId);
   const obj = canvas.getActiveObject();
@@ -195,7 +188,6 @@ function deleteActiveObject(canvasId) {
   }
 }
 
-// 保存
 function saveImage(canvasId) {
   const canvas = canvases.find(c => c.getElement().id === canvasId);
   canvas.discardActiveObject();
@@ -210,7 +202,6 @@ function saveImage(canvasId) {
   }, 'image/png');
 }
 
-// 履歴管理（undo/redo）
 function saveState(canvas) {
   const id = canvas.getElement().id;
   if (!historyMap.has(id)) {
@@ -235,7 +226,6 @@ function restoreState(canvasId, type) {
 function undo(canvasId) { restoreState(canvasId, 'undo'); }
 function redo(canvasId) { restoreState(canvasId, 'redo'); }
 
-// 全消去
 function confirmReset(canvasId) {
   if (confirm('この枠の画像をすべて消去しますか？')) {
     const canvas = canvases.find(c => c.getElement().id === canvasId);
