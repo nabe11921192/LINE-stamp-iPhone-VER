@@ -95,10 +95,25 @@ const canvas = new fabric.Canvas('canvas0', {
 canvases.push(canvas);
 saveState(canvas);
 
+let clickTracker = new WeakMap();
 canvas.on('mouse:down', function(opt) {
   if (opt.target) {
-    canvas.setActiveObject(opt.target);
-    opt.target.bringToFront();
+    const prevClick = clickTracker.get(opt.target) || 0;
+    if (prevClick === 1) {
+      // bring the next lower object to front
+      const objs = canvas.getObjects();
+      const idx = objs.indexOf(opt.target);
+      const next = objs.slice(0, idx).reverse().find(o => o.selectable);
+      if (next) {
+        canvas.setActiveObject(next);
+        next.bringToFront();
+      }
+      clickTracker.set(opt.target, 0);
+    } else {
+      canvas.setActiveObject(opt.target);
+      opt.target.bringToFront();
+      clickTracker.set(opt.target, 1);
+    }
     canvas.requestRenderAll();
   }
 });
