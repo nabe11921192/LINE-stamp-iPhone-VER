@@ -4,13 +4,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>レイヤー画像エディタ完全版</title>
+  <title>修正版：画像エディタ完全版</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://code.jquery.com/ui/1.13.0/jquery-ui.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <style>
     html, body {
-      margin: 0; padding: 0; height: 100%;
+      margin: 0; padding: 0;
+      height: 100%;
       background: #f0f0f0;
       overflow: hidden;
       font-family: sans-serif;
@@ -26,7 +27,35 @@
       height: 320px;
       background: white;
       border: 1px solid #ccc;
-      position: relative;
+    }
+    #layerPanel {
+      display: flex;
+      flex-direction: row;
+      gap: 10px;
+      margin: 10px 0;
+      background: rgba(255,255,255,0.95);
+      padding: 5px;
+      border: 1px solid #aaa;
+      overflow-x: auto;
+      touch-action: auto;
+    }
+    .layer-thumb {
+      width: 50px;
+      height: 50px;
+      border: 2px solid gray;
+      object-fit: cover;
+      cursor: pointer;
+      user-select: none;
+    }
+    .layer-thumb.active {
+      border-color: red;
+    }
+    .sortable-chosen {
+      opacity: 0.6;
+    }
+    .sortable-ghost {
+      border: 2px dashed #999;
+      background: #eee;
     }
     .top-controls, .controls {
       margin-top: 10px;
@@ -54,32 +83,6 @@
     .template-modal img {
       width: 80px;
       cursor: pointer;
-    }
-    #layerPanel {
-      margin-top: 10px;
-      display: flex;
-      gap: 10px;
-      background: rgba(255,255,255,0.9);
-      padding: 5px;
-      border: 1px solid #aaa;
-      overflow-x: auto;
-    }
-    .layer-thumb {
-      width: 50px;
-      height: 50px;
-      border: 2px solid gray;
-      object-fit: cover;
-      cursor: pointer;
-      touch-action: none;
-    }
-    .layer-thumb.active {
-      border-color: red;
-    }
-    .sortable-placeholder {
-      width: 50px;
-      height: 50px;
-      border: 2px dashed #999;
-      background: #eee;
     }
   </style>
 </head>
@@ -109,7 +112,10 @@
 let canvases = [];
 let historyMap = new Map();
 let layers = [];
-const canvas = new fabric.Canvas('canvas0', { preserveObjectStacking: true });
+const canvas = new fabric.Canvas('canvas0', {
+  preserveObjectStacking: true,
+  selection: true
+});
 canvases.push(canvas);
 saveState(canvas);
 
@@ -121,6 +127,7 @@ const templateImages = [
   "https://nabe11921192.github.io/assets/template5.png",
   "https://nabe11921192.github.io/assets/template6.png"
 ];
+
 let currentCanvasIdForTemplate = null;
 
 document.getElementById('imgInput').addEventListener('change', function(e) {
@@ -130,12 +137,13 @@ document.getElementById('imgInput').addEventListener('change', function(e) {
   reader.onload = function(evt) {
     fabric.Image.fromURL(evt.target.result, function(img) {
       const scale = Math.min(370 / img.width, 320 / img.height);
-      img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: false });
+      img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: true });
       canvas.insertAt(img, 0, false);
       layers.unshift(img);
       addLayerThumb(img, evt.target.result);
+      canvas.setActiveObject(img);
       canvas.requestRenderAll();
-    });
+    }, { crossOrigin: 'anonymous' });
   };
   reader.readAsDataURL(file);
 });
@@ -144,26 +152,26 @@ function addLayerThumb(obj, src) {
   const thumb = document.createElement('img');
   thumb.src = src;
   thumb.className = 'layer-thumb';
-  thumb.ondragstart = () => false; // prevent drag image
-  thumb.ontouchstart = e => e.preventDefault(); // for iOS touch
-  thumb.onclick = function() {
+  thumb.addEventListener('click', () => {
     layers.forEach(o => o.selectable = false);
     obj.selectable = true;
-    canvas.setActiveObject(obj);
     obj.bringToFront();
+    canvas.setActiveObject(obj);
     document.querySelectorAll('.layer-thumb').forEach(t => t.classList.remove('active'));
     thumb.classList.add('active');
     canvas.requestRenderAll();
-  };
+  });
   document.getElementById('layerPanel').prepend(thumb);
 }
 
-new Sortable(layerPanel, {
+new Sortable(document.getElementById('layerPanel'), {
   animation: 150,
-  ghostClass: 'sortable-placeholder',
+  ghostClass: 'sortable-ghost',
   onUpdate: function () {
     const newOrder = Array.from(document.querySelectorAll(".layer-thumb"));
-    const newLayers = newOrder.map(el => layers.find(o => el.src.includes(o._element?.src)));
+    const newLayers = newOrder.map(el =>
+      layers.find(o => o._element && el.src.includes(o._element.src))
+    );
     layers = newLayers.filter(Boolean);
     canvas.clear();
     for (let i = layers.length - 1; i >= 0; i--) {
@@ -189,10 +197,11 @@ function showTemplateSelector(canvasId) {
 function insertTemplateImage(src) {
   fabric.Image.fromURL(src, function(img) {
     const scale = Math.min(370 / img.width, 320 / img.height);
-    img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: false });
+    img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: true });
     canvas.insertAt(img, 0, false);
     layers.unshift(img);
     addLayerThumb(img, src);
+    canvas.setActiveObject(img);
     canvas.requestRenderAll();
   }, { crossOrigin: 'anonymous' });
   document.getElementById('templateModal').style.display = 'none';
@@ -260,6 +269,5 @@ function confirmReset(canvasId) {
   }
 }
 </script>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </body>
 </html>
