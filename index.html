@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>画像エディタ改修版</title>
+  <title>画像エディタ完全最終版</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
@@ -37,17 +37,23 @@
       padding: 8px;
       border: 1px solid #aaa;
       overflow-x: auto;
+      touch-action: none;
     }
     .layer-thumb {
       width: 60px;
       height: 60px;
       border: 2px solid gray;
       object-fit: cover;
-      cursor: pointer;
+      cursor: grab;
       user-select: none;
+      touch-action: none;
     }
     .layer-thumb.active {
       border-color: red;
+    }
+    .sortable-ghost {
+      border: 2px dashed #999;
+      background: #ddd;
     }
     .top-controls, .controls {
       margin-top: 10px;
@@ -117,14 +123,13 @@ const canvas = new fabric.Canvas('canvas0', {
 canvases.push(canvas);
 saveState(canvas);
 
-const templateImages = [
-  "https://nabe11921192.github.io/assets/template1.png",
-  "https://nabe11921192.github.io/assets/template2.png",
-  "https://nabe11921192.github.io/assets/template3.png",
-  "https://nabe11921192.github.io/assets/template4.png",
-  "https://nabe11921192.github.io/assets/template5.png",
-  "https://nabe11921192.github.io/assets/template6.png"
-];
+function reorderCanvas() {
+  canvas.clear();
+  for (let i = 0; i < layers.length; i++) {
+    canvas.add(layers[i]);
+  }
+  canvas.requestRenderAll();
+}
 
 document.getElementById('imgInput').addEventListener('change', function(e) {
   const files = Array.from(e.target.files);
@@ -134,7 +139,7 @@ document.getElementById('imgInput').addEventListener('change', function(e) {
       fabric.Image.fromURL(evt.target.result, function(img) {
         const scale = Math.min(370 / img.width, 320 / img.height);
         img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: true });
-        layers.push(img);  // ← 右が奥、左が手前になるよう逆順で保持
+        layers.push(img);
         canvas.add(img);
         addLayerThumb(img, evt.target.result);
         canvas.setActiveObject(img);
@@ -157,23 +162,28 @@ function addLayerThumb(obj, src) {
     document.querySelectorAll('.layer-thumb').forEach(t => t.classList.remove('active'));
     thumb.classList.add('active');
   });
-  document.getElementById('layerPanel').appendChild(thumb); // 右が奥
+  document.getElementById('layerPanel').appendChild(thumb);
 }
 
-function updateLayerOrder() {
-  canvas.clear();
-  for (let i = 0; i < layers.length; i++) {
-    canvas.add(layers[i]);
+new Sortable(document.getElementById('layerPanel'), {
+  animation: 150,
+  ghostClass: 'sortable-ghost',
+  onEnd: function (evt) {
+    const newOrder = Array.from(document.querySelectorAll(".layer-thumb"));
+    const newLayers = newOrder.map(el =>
+      layers.find(o => o._element && el.src.includes(o._element.src))
+    );
+    layers = newLayers.filter(Boolean);
+    reorderCanvas();
   }
-  canvas.requestRenderAll();
-}
+});
 
 function copyActiveObject() {
   const obj = canvas.getActiveObject();
   if (obj) {
     obj.clone(cloned => {
       cloned.set({ left: obj.left + 10, top: obj.top + 10 });
-      layers.push(cloned); // 最背面に追加
+      layers.push(cloned);
       canvas.add(cloned);
       addLayerThumb(cloned, cloned._element.src);
       canvas.setActiveObject(cloned);
@@ -182,8 +192,16 @@ function copyActiveObject() {
   }
 }
 
-function showTemplateSelector(canvasId) {
+function showTemplateSelector() {
   const modal = document.getElementById('templateModal');
+  const templateImages = [
+    "https://nabe11921192.github.io/assets/template1.png",
+    "https://nabe11921192.github.io/assets/template2.png",
+    "https://nabe11921192.github.io/assets/template3.png",
+    "https://nabe11921192.github.io/assets/template4.png",
+    "https://nabe11921192.github.io/assets/template5.png",
+    "https://nabe11921192.github.io/assets/template6.png"
+  ];
   modal.innerHTML = '';
   templateImages.forEach(src => {
     const img = document.createElement('img');
@@ -218,7 +236,7 @@ function deleteActiveObject(canvasId) {
       if (obj._element && t.src.includes(obj._element.src)) t.remove();
     });
     saveState(canvas);
-    updateLayerOrder();
+    reorderCanvas();
   }
 }
 
