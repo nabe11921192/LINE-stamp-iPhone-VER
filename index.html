@@ -4,17 +4,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>画像エディタ完全最終版</title>
+  <title>完全修正版 画像エディタ</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <style>
     html, body {
       margin: 0; padding: 0;
-      height: 100%;
       background: #f0f0f0;
-      overflow: hidden;
       font-family: sans-serif;
+      touch-action: manipulation;
     }
     .container {
       display: flex;
@@ -27,17 +26,16 @@
       height: 320px;
       background: white;
       border: 1px solid #ccc;
+      overflow: hidden;
     }
     #layerPanel {
       display: flex;
-      flex-direction: row;
-      gap: 10px;
+      gap: 8px;
       margin: 10px 0;
-      background: rgba(255,255,255,0.95);
-      padding: 8px;
+      padding: 6px;
       border: 1px solid #aaa;
+      background: rgba(255,255,255,0.95);
       overflow-x: auto;
-      touch-action: none;
     }
     .layer-thumb {
       width: 60px;
@@ -49,7 +47,7 @@
       touch-action: none;
     }
     .layer-thumb.active {
-      border-color: red;
+      border: 2px solid red;
     }
     .sortable-ghost {
       border: 2px dashed #999;
@@ -58,14 +56,9 @@
     .top-controls, .controls {
       margin-top: 10px;
       display: flex;
-      gap: 15px;
-      justify-content: center;
+      gap: 12px;
       flex-wrap: wrap;
-    }
-    .top-controls button,
-    .controls button {
-      font-size: 16px;
-      padding: 8px 12px;
+      justify-content: center;
     }
     input[type="file"] {
       display: none;
@@ -79,6 +72,7 @@
       border: 1px solid #ccc;
       padding: 20px;
       z-index: 1000;
+      display: flex;
       flex-wrap: wrap;
       gap: 10px;
       max-width: 90vw;
@@ -99,7 +93,7 @@
     <label style="background:#ccc;padding:8px 16px;border-radius:4px;cursor:pointer;">
       画像選択<input type="file" id="imgInput" accept="image/*" multiple>
     </label>
-    <button onclick="showTemplateSelector('canvas0')">テンプレ</button>
+    <button onclick="showTemplateSelector()">テンプレ</button>
     <button onclick="copyActiveObject()">コピー</button>
     <button onclick="deleteActiveObject('canvas0')">削除</button>
   </div>
@@ -113,9 +107,7 @@
 <div class="template-modal" id="templateModal"></div>
 
 <script>
-let canvases = [];
-let historyMap = new Map();
-let layers = [];
+let canvases = [], historyMap = new Map(), layers = [];
 const canvas = new fabric.Canvas('canvas0', {
   preserveObjectStacking: true,
   selection: true
@@ -143,6 +135,7 @@ document.getElementById('imgInput').addEventListener('change', function(e) {
         canvas.add(img);
         addLayerThumb(img, evt.target.result);
         canvas.setActiveObject(img);
+        saveState(canvas);
         canvas.requestRenderAll();
       }, { crossOrigin: 'anonymous' });
     };
@@ -154,13 +147,16 @@ function addLayerThumb(obj, src) {
   const thumb = document.createElement('img');
   thumb.src = src;
   thumb.className = 'layer-thumb';
+  thumb.ondragstart = e => e.preventDefault();
+  thumb.ontouchstart = e => e.preventDefault();
   thumb.addEventListener('click', () => {
     layers.forEach(o => o.selectable = false);
     obj.selectable = true;
     canvas.setActiveObject(obj);
-    canvas.requestRenderAll();
     document.querySelectorAll('.layer-thumb').forEach(t => t.classList.remove('active'));
     thumb.classList.add('active');
+    saveState(canvas);
+    canvas.requestRenderAll();
   });
   document.getElementById('layerPanel').appendChild(thumb);
 }
@@ -168,12 +164,9 @@ function addLayerThumb(obj, src) {
 new Sortable(document.getElementById('layerPanel'), {
   animation: 150,
   ghostClass: 'sortable-ghost',
-  onEnd: function (evt) {
+  onEnd: function () {
     const newOrder = Array.from(document.querySelectorAll(".layer-thumb"));
-    const newLayers = newOrder.map(el =>
-      layers.find(o => o._element && el.src.includes(o._element.src))
-    );
-    layers = newLayers.filter(Boolean);
+    layers = newOrder.map(el => layers.find(o => o._element && el.src.includes(o._element.src)));
     reorderCanvas();
   }
 });
@@ -187,6 +180,7 @@ function copyActiveObject() {
       canvas.add(cloned);
       addLayerThumb(cloned, cloned._element.src);
       canvas.setActiveObject(cloned);
+      saveState(canvas);
       canvas.requestRenderAll();
     });
   }
@@ -194,15 +188,12 @@ function copyActiveObject() {
 
 function showTemplateSelector() {
   const modal = document.getElementById('templateModal');
+  modal.innerHTML = '';
   const templateImages = [
     "https://nabe11921192.github.io/assets/template1.png",
     "https://nabe11921192.github.io/assets/template2.png",
-    "https://nabe11921192.github.io/assets/template3.png",
-    "https://nabe11921192.github.io/assets/template4.png",
-    "https://nabe11921192.github.io/assets/template5.png",
-    "https://nabe11921192.github.io/assets/template6.png"
+    "https://nabe11921192.github.io/assets/template3.png"
   ];
-  modal.innerHTML = '';
   templateImages.forEach(src => {
     const img = document.createElement('img');
     img.src = src;
@@ -220,6 +211,7 @@ function insertTemplateImage(src) {
     canvas.add(img);
     addLayerThumb(img, src);
     canvas.setActiveObject(img);
+    saveState(canvas);
     canvas.requestRenderAll();
   }, { crossOrigin: 'anonymous' });
   document.getElementById('templateModal').style.display = 'none';
@@ -231,8 +223,7 @@ function deleteActiveObject(canvasId) {
   if (obj) {
     canvas.remove(obj);
     layers = layers.filter(o => o !== obj);
-    const thumbs = document.querySelectorAll('.layer-thumb');
-    thumbs.forEach(t => {
+    document.querySelectorAll('.layer-thumb').forEach(t => {
       if (obj._element && t.src.includes(obj._element.src)) t.remove();
     });
     saveState(canvas);
