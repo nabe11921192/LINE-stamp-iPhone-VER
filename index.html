@@ -3,8 +3,8 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>画像エディタ修正版＋レイヤー機能</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>レイヤー画像エディタ完全版</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://code.jquery.com/ui/1.13.0/jquery-ui.min.js"></script>
@@ -13,7 +13,6 @@
       margin: 0; padding: 0; height: 100%;
       background: #f0f0f0;
       overflow: hidden;
-      touch-action: none;
       font-family: sans-serif;
     }
     .container {
@@ -27,6 +26,7 @@
       height: 320px;
       background: white;
       border: 1px solid #ccc;
+      position: relative;
     }
     .top-controls, .controls {
       margin-top: 10px;
@@ -56,16 +56,13 @@
       cursor: pointer;
     }
     #layerPanel {
-      position: fixed;
-      bottom: 10px;
-      left: 10px;
+      margin-top: 10px;
       display: flex;
-      flex-direction: row;
       gap: 10px;
-      background: rgba(255,255,255,0.8);
+      background: rgba(255,255,255,0.9);
       padding: 5px;
       border: 1px solid #aaa;
-      z-index: 1000;
+      overflow-x: auto;
     }
     .layer-thumb {
       width: 50px;
@@ -73,9 +70,16 @@
       border: 2px solid gray;
       object-fit: cover;
       cursor: pointer;
+      touch-action: none;
     }
     .layer-thumb.active {
       border-color: red;
+    }
+    .sortable-placeholder {
+      width: 50px;
+      height: 50px;
+      border: 2px dashed #999;
+      background: #eee;
     }
   </style>
 </head>
@@ -84,6 +88,7 @@
   <div class="box">
     <canvas id="canvas0" width="370" height="320"></canvas>
   </div>
+  <div id="layerPanel"></div>
   <div class="top-controls">
     <label style="background:#ccc;padding:6px 12px;border-radius:4px;cursor:pointer;">
       画像選択<input type="file" id="imgInput" accept="image/*">
@@ -99,7 +104,6 @@
   </div>
 </div>
 <div class="template-modal" id="templateModal"></div>
-<div id="layerPanel"></div>
 
 <script>
 let canvases = [];
@@ -127,7 +131,7 @@ document.getElementById('imgInput').addEventListener('change', function(e) {
     fabric.Image.fromURL(evt.target.result, function(img) {
       const scale = Math.min(370 / img.width, 320 / img.height);
       img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: false });
-      canvas.insertAt(img, 0, false); // 背面に追加
+      canvas.insertAt(img, 0, false);
       layers.unshift(img);
       addLayerThumb(img, evt.target.result);
       canvas.requestRenderAll();
@@ -140,10 +144,13 @@ function addLayerThumb(obj, src) {
   const thumb = document.createElement('img');
   thumb.src = src;
   thumb.className = 'layer-thumb';
+  thumb.ondragstart = () => false; // prevent drag image
+  thumb.ontouchstart = e => e.preventDefault(); // for iOS touch
   thumb.onclick = function() {
     layers.forEach(o => o.selectable = false);
     obj.selectable = true;
     canvas.setActiveObject(obj);
+    obj.bringToFront();
     document.querySelectorAll('.layer-thumb').forEach(t => t.classList.remove('active'));
     thumb.classList.add('active');
     canvas.requestRenderAll();
@@ -151,8 +158,10 @@ function addLayerThumb(obj, src) {
   document.getElementById('layerPanel').prepend(thumb);
 }
 
-$("#layerPanel").sortable({
-  update: function(event, ui) {
+new Sortable(layerPanel, {
+  animation: 150,
+  ghostClass: 'sortable-placeholder',
+  onUpdate: function () {
     const newOrder = Array.from(document.querySelectorAll(".layer-thumb"));
     const newLayers = newOrder.map(el => layers.find(o => el.src.includes(o._element?.src)));
     layers = newLayers.filter(Boolean);
@@ -251,5 +260,6 @@ function confirmReset(canvasId) {
   }
 }
 </script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </body>
 </html>
