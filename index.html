@@ -78,7 +78,8 @@
       cursor: pointer;
     }
     .top-controls,
-    .bottom-controls {
+    .bottom-controls,
+    .control-panel {
       display: flex;
       gap: 10px;
       margin-top: 10px;
@@ -87,12 +88,17 @@
     }
     .top-controls label,
     .top-controls button,
-    .bottom-controls button {
+    .bottom-controls button,
+    .control-panel button {
       font-size: 14px;
       padding: 6px 12px;
       background: white;
       border: 1px solid #999;
       border-radius: 4px;
+    }
+    .control-panel {
+      flex-wrap: wrap;
+      flex-direction: row;
     }
     input[type="file"] {
       display: none;
@@ -117,209 +123,43 @@
     <button onclick="saveImage('canvas0')">保存</button>
     <button onclick="confirmReset('canvas0')">リセット</button>
   </div>
+  <div class="control-panel">
+    <button onclick="moveSelected(0, -10)">↑</button>
+    <button onclick="moveSelected(0, 10)">↓</button>
+    <button onclick="moveSelected(-10, 0)">←</button>
+    <button onclick="moveSelected(10, 0)">→</button>
+    <button onclick="scaleSelected(1.1)">拡大</button>
+    <button onclick="scaleSelected(0.9)">縮小</button>
+    <button onclick="rotateSelected(-15)">左回転</button>
+    <button onclick="rotateSelected(15)">右回転</button>
+  </div>
 </div>
 <div class="template-modal" id="templateModal"></div>
 <script>
-let canvases = [];
-let historyMap = new Map();
-let layers = [];
-let thumbMap = new Map();
-const canvas = new fabric.Canvas('canvas0', {
-  preserveObjectStacking: true,
-  selection: true
-});
-canvases.push(canvas);
-saveState(canvas);
-
-function reorderCanvas() {
-  canvas.clear();
-  for (let i = 0; i < layers.length; i++) {
-    canvas.add(layers[i]);
-  }
-  canvas.requestRenderAll();
-}
-
-document.getElementById('imgInput').addEventListener('change', function(e) {
-  const files = Array.from(e.target.files);
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-      fabric.Image.fromURL(evt.target.result, function(img) {
-        const scale = Math.min(370 / img.width, 320 / img.height);
-        img.set({
-          left: 0,
-          top: 0,
-          scaleX: scale,
-          scaleY: scale,
-          selectable: true,
-          hasBorders: true,
-          hasControls: true,
-          objectCaching: false
-        });
-        img.setCoords();
-        layers.push(img);
-        canvas.add(img);
-        const thumb = addLayerThumb(img, evt.target.result);
-        thumbMap.set(img, thumb);
-        canvas.setActiveObject(img);
-        canvas.requestRenderAll();
-      }, { crossOrigin: 'anonymous' });
-    };
-    reader.readAsDataURL(file);
-  });
-});
-
-function addLayerThumb(obj, src) {
-  const thumb = document.createElement('img');
-  thumb.src = src;
-  thumb.className = 'layer-thumb';
-  thumb.addEventListener('click', () => {
-    layers.forEach(o => o.selectable = false);
-    obj.selectable = true;
-    canvas.setActiveObject(obj);
-    canvas.requestRenderAll();
-    document.querySelectorAll('.layer-thumb').forEach(t => t.classList.remove('active'));
-    thumb.classList.add('active');
-  });
-  document.getElementById('layerPanel').appendChild(thumb);
-  return thumb;
-}
-
-new Sortable(document.getElementById('layerPanel'), {
-  animation: 150,
-  ghostClass: 'sortable-ghost',
-  onEnd: function () {
-    const newOrder = Array.from(document.querySelectorAll(".layer-thumb"));
-    const newLayers = newOrder.map(el => {
-      for (let [img, thumb] of thumbMap.entries()) {
-        if (thumb === el) return img;
-      }
-      return null;
-    });
-    layers = newLayers.filter(Boolean);
-    reorderCanvas();
-  }
-});
-
-function copyActiveObject() {
+function moveSelected(dx, dy) {
   const obj = canvas.getActiveObject();
   if (obj) {
-    obj.clone(cloned => {
-      cloned.set({ left: obj.left + 10, top: obj.top + 10 });
-      layers.push(cloned);
-      canvas.add(cloned);
-      const thumb = addLayerThumb(cloned, cloned._element.src);
-      thumbMap.set(cloned, thumb);
-      canvas.setActiveObject(cloned);
-      canvas.requestRenderAll();
-    });
+    obj.left += dx;
+    obj.top += dy;
+    obj.setCoords();
+    canvas.requestRenderAll();
   }
 }
-
-function showTemplateSelector() {
-  const modal = document.getElementById('templateModal');
-  const templateImages = [
-    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/2721c1a2-cca1-4015-b489-17487fb5db03.png",
-    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/2e2b364a-39cc-4aa6-860b-e1be1cef26d7.png",
-    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/4815703a-d899-4e24-84ad-82e9e7b19c45.png",
-    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/5afbcc61-3709-4292-a376-6fb75fd027f9.png",
-    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/6ae92533-5c01-4cc5-adc1-9bd8713eedf9.png",
-    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/80a6d75f-7c3b-4926-8c50-48c6a1a6ff25.png"
-  ];
-  modal.innerHTML = '';
-  templateImages.forEach(src => {
-    const img = document.createElement('img');
-    img.src = src;
-    img.onclick = () => insertTemplateImage(src);
-    modal.appendChild(img);
-  });
-  modal.style.display = 'flex';
-}
-
-function insertTemplateImage(src) {
-  fabric.Image.fromURL(src, function(img) {
-    const scale = Math.min(370 / img.width, 320 / img.height);
-    img.set({
-      left: 0,
-      top: 0,
-      scaleX: scale,
-      scaleY: scale,
-      selectable: true,
-      hasBorders: true,
-      hasControls: true,
-      objectCaching: false
-    });
-    img.setCoords();
-    layers.push(img);
-    canvas.add(img);
-    const thumb = addLayerThumb(img, src);
-    thumbMap.set(img, thumb);
-    canvas.setActiveObject(img);
-    canvas.requestRenderAll();
-  }, { crossOrigin: 'anonymous' });
-  document.getElementById('templateModal').style.display = 'none';
-}
-
-function deleteActiveObject(canvasId) {
-  const canvas = canvases.find(c => c.getElement().id === canvasId);
+function scaleSelected(factor) {
   const obj = canvas.getActiveObject();
   if (obj) {
-    canvas.remove(obj);
-    layers = layers.filter(o => o !== obj);
-    const thumb = thumbMap.get(obj);
-    if (thumb) thumb.remove();
-    thumbMap.delete(obj);
-    saveState(canvas);
-    reorderCanvas();
+    obj.scaleX *= factor;
+    obj.scaleY *= factor;
+    obj.setCoords();
+    canvas.requestRenderAll();
   }
 }
-
-function saveImage(canvasId) {
-  const canvas = canvases.find(c => c.getElement().id === canvasId);
-  canvas.discardActiveObject();
-  canvas.clearContext(canvas.contextTop);
-  canvas.renderAll();
-  canvas.getElement().toBlob(blob => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = canvasId + '.png';
-    a.click();
-  }, 'image/png');
-}
-
-function saveState(canvas) {
-  const id = canvas.getElement().id;
-  if (!historyMap.has(id)) {
-    historyMap.set(id, { undo: [], redo: [] });
-  }
-  const state = canvas.toJSON();
-  historyMap.get(id).undo.push(state);
-  historyMap.get(id).redo = [];
-}
-
-function restoreState(canvasId, type) {
-  const canvas = canvases.find(c => c.getElement().id === canvasId);
-  const history = historyMap.get(canvasId);
-  if (!history || !history[type].length) return;
-  const current = canvas.toJSON();
-  const state = history[type].pop();
-  if (type === 'undo') history.redo.push(current);
-  else history.undo.push(current);
-  canvas.loadFromJSON(state, () => canvas.renderAll());
-}
-
-function undo(canvasId) { restoreState(canvasId, 'undo'); }
-function redo(canvasId) { restoreState(canvasId, 'redo'); }
-
-function confirmReset(canvasId) {
-  if (confirm('この枠の画像をすべて消去しますか？')) {
-    const canvas = canvases.find(c => c.getElement().id === canvasId);
-    canvas.clear();
-    document.getElementById('layerPanel').innerHTML = '';
-    layers = [];
-    thumbMap.clear();
-    saveState(canvas);
+function rotateSelected(deg) {
+  const obj = canvas.getActiveObject();
+  if (obj) {
+    obj.angle += deg;
+    obj.setCoords();
+    canvas.requestRenderAll();
   }
 }
 </script>
