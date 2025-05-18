@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>画像エディタ 完全ピンチ対応</title>
+  <title>画像エディタ Ver.1.2.0</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
@@ -139,7 +139,7 @@
 </div>
 <div class="template-modal" id="templateModal"></div>
 <div style="position: fixed; bottom: 5px; right: 10px; font-size: 12px; color: #666; z-index: 999;">
-  Ver. 1.1.0
+  Ver. 1.2.0
 </div>
 <script>
 const canvas = new fabric.Canvas('canvas0', {
@@ -206,8 +206,10 @@ function moveSelected(dx, dy) {
 function scaleSelected(factor) {
   const obj = canvas.getActiveObject();
   if (obj) {
+    const center = obj.getCenterPoint();
     obj.scaleX *= factor;
     obj.scaleY *= factor;
+    obj.setPositionByOrigin(center, 'center', 'center');
     obj.setCoords();
     canvas.requestRenderAll();
     saveState();
@@ -324,6 +326,7 @@ function deleteActiveObject() {
   }
 }
 
+// レイヤーパネルの並び順
 new Sortable(document.getElementById('layerPanel'), {
   animation: 150,
   ghostClass: 'sortable-ghost',
@@ -338,22 +341,27 @@ new Sortable(document.getElementById('layerPanel'), {
   }
 });
 
-// ✅ ピンチ操作：Hammer.js でアクティブオブジェクト拡大
+// ✅ ピンチ操作で中心を保って拡大縮小
 const hammer = new Hammer(canvas.upperCanvasEl);
 hammer.get('pinch').set({ enable: true });
 
 let initialScale = 1;
+let centerBefore = null;
+
 hammer.on('pinchstart', () => {
   const obj = canvas.getActiveObject();
   if (obj) {
     initialScale = obj.scaleX;
+    centerBefore = obj.getCenterPoint();
   }
 });
+
 hammer.on('pinch', ev => {
   const obj = canvas.getActiveObject();
-  if (obj) {
-    const scale = initialScale * ev.scale;
-    obj.scaleX = obj.scaleY = scale;
+  if (obj && centerBefore) {
+    const newScale = initialScale * ev.scale;
+    obj.scaleX = obj.scaleY = newScale;
+    obj.setPositionByOrigin(centerBefore, 'center', 'center');
     obj.setCoords();
     canvas.requestRenderAll();
   }
