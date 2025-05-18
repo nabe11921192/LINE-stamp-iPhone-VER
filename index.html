@@ -216,10 +216,13 @@ function scaleSelected(factor) {
 function rotateSelected(deg) {
   const obj = canvas.getActiveObject();
   if (obj) {
-    obj.angle += deg;
+    const center = obj.getCenterPoint();
+    obj.rotate((obj.angle || 0) + deg);
+    obj.setPositionByOrigin(center, 'center', 'center');
     obj.setCoords();
     canvas.requestRenderAll();
   }
+}
 }
 function showTemplateSelector() {
   const modal = document.getElementById('templateModal');
