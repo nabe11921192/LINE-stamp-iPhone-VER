@@ -136,6 +136,10 @@
   Ver. 1.0.0
 </div>
 <script>
+let history = [];
+let redoStack = [];
+let layers = [];
+
 const canvas = new fabric.Canvas('canvas0', {
   preserveObjectStacking: true,
   selection: true
@@ -222,7 +226,6 @@ function rotateSelected(deg) {
     obj.setCoords();
     canvas.requestRenderAll();
   }
-}
 }
 function showTemplateSelector() {
   const modal = document.getElementById('templateModal');
