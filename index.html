@@ -110,7 +110,6 @@
   </div>
 </div>
 <div class="template-modal" id="templateModal"></div>
-
 <script>
 let canvases = [];
 let historyMap = new Map();
@@ -137,7 +136,18 @@ document.getElementById('imgInput').addEventListener('change', function(e) {
     reader.onload = function(evt) {
       fabric.Image.fromURL(evt.target.result, function(img) {
         const scale = Math.min(370 / img.width, 320 / img.height);
-        img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: true });
+        img.set({
+          left: 0,
+          top: 0,
+          scaleX: scale,
+          scaleY: scale,
+          selectable: true,
+          hasBorders: true,
+          hasControls: true,
+          objectCaching: false
+        });
+        img.setCoords();
+
         layers.push(img);
         canvas.add(img);
         addLayerThumb(img, evt.target.result);
@@ -214,7 +224,18 @@ function showTemplateSelector() {
 function insertTemplateImage(src) {
   fabric.Image.fromURL(src, function(img) {
     const scale = Math.min(370 / img.width, 320 / img.height);
-    img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: true });
+    img.set({
+      left: 0,
+      top: 0,
+      scaleX: scale,
+      scaleY: scale,
+      selectable: true,
+      hasBorders: true,
+      hasControls: true,
+      objectCaching: false
+    });
+    img.setCoords();
+
     layers.push(img);
     canvas.add(img);
     addLayerThumb(img, src);
