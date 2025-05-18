@@ -4,63 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>画像エディタ完全最終版</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js">function copyActiveObject() {
-  const obj = canvas.getActiveObject();
-  if (obj) {
-    obj.clone(cloned => {
-      cloned.set({ left: obj.left + 10, top: obj.top + 10 });
-      canvas.add(cloned);
-      canvas.setActiveObject(cloned);
-      canvas.requestRenderAll();
-    });
-  }
-}
-
-function deleteActiveObject() {
-  const obj = canvas.getActiveObject();
-  if (obj) {
-    canvas.remove(obj);
-    canvas.discardActiveObject();
-    canvas.requestRenderAll();
-  }
-}
-
-let history = [];
-function saveState() {
-  history.push(JSON.stringify(canvas));
-  if (history.length > 50) history.shift();
-}
-
-function undo() {
-  if (history.length > 1) {
-    history.pop();
-    const state = history[history.length - 1];
-    canvas.loadFromJSON(state, () => canvas.renderAll());
-  }
-}
-
-function redo() {
-  // オプション：実装されていない
-  alert("進む操作は未対応です");
-}
-
-function saveImage() {
-  const dataURL = canvas.toDataURL({ format: 'png' });
-  const link = document.createElement('a');
-  link.href = dataURL;
-  link.download = 'canvas.png';
-  link.click();
-}
-
-function confirmReset() {
-  if (confirm('この枠の画像をすべて消去しますか？')) {
-    canvas.clear();
-    saveState();
-  }
-}
-
-saveState();
-</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <style>
@@ -186,12 +130,7 @@ saveState();
     <button style="font-size:16px;padding:10px 14px;" onclick="rotateSelected(-15)">左回転</button>
     <button style="font-size:16px;padding:10px 14px;" onclick="rotateSelected(15)">右回転</button>
   </div>
-  <div style="display: flex; flex-direction: column; align-items: center; margin-left: 30px;">
-    <button style="font-size:16px;padding:10px 14px;" onclick="moveSelected(0, -10)">↑</button>
-    <div style="display: flex; gap: 6px;">
-      <button style="font-size:16px;padding:10px 14px;" onclick="moveSelected(-10, 0)">←</button>
-      <button style="font-size:16px;padding:10px 14px;" onclick="moveSelected(10, 0)">→</button>
-    </div>
+  
     <button style="font-size:16px;padding:10px 14px;" onclick="moveSelected(0, 10)">↓</button>
   </div>
 </div>
