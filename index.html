@@ -191,15 +191,21 @@ function insertTemplateImage(src) {
     <button onclick="confirmReset('canvas0')">リセット</button>
   </div>
   <div class="control-panel">
-    <button onclick="moveSelected(0, -10)">↑</button>
-    <button onclick="moveSelected(0, 10)">↓</button>
-    <button onclick="moveSelected(-10, 0)">←</button>
-    <button onclick="moveSelected(10, 0)">→</button>
+  <div style="display: flex; flex-direction: column; gap: 5px;">
     <button onclick="scaleSelected(1.1)">拡大</button>
     <button onclick="scaleSelected(0.9)">縮小</button>
     <button onclick="rotateSelected(-15)">左回転</button>
     <button onclick="rotateSelected(15)">右回転</button>
   </div>
+  <div style="display: flex; flex-direction: column; align-items: center; margin-left: 30px;">
+    <button onclick="moveSelected(0, -10)">↑</button>
+    <div style="display: flex; gap: 5px;">
+      <button onclick="moveSelected(-10, 0)">←</button>
+      <button onclick="moveSelected(10, 0)">→</button>
+    </div>
+    <button onclick="moveSelected(0, 10)">↓</button>
+  </div>
+</div>
 </div>
 <div class="template-modal" id="templateModal"></div>
 <script>
