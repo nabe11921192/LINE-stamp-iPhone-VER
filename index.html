@@ -3,22 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>画像エディタ完全最終版</title>
+  <title>画像エディタ修正版</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <style>
     html, body {
-      margin: 0; padding: 0;
-      height: 100%;
+      margin: 0; padding: 0; height: 100%;
       background: #f0f0f0;
       overflow: hidden;
+      touch-action: none;
       font-family: sans-serif;
     }
     .container {
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: start;
       padding: 10px;
     }
     .box {
@@ -26,46 +25,13 @@
       height: 320px;
       background: white;
       border: 1px solid #ccc;
-      touch-action: none;
-    }
-    #layerPanel {
-      display: flex;
-      flex-direction: row;
-      gap: 10px;
-      margin: 10px 0;
-      background: rgba(255,255,255,0.95);
-      padding: 8px;
-      border: 1px solid #aaa;
-      overflow-x: auto;
-      touch-action: none;
-    }
-    .layer-thumb {
-      width: 60px;
-      height: 60px;
-      border: 2px solid gray;
-      object-fit: cover;
-      cursor: grab;
-      user-select: none;
-      touch-action: none;
-    }
-    .layer-thumb.active {
-      border-color: red;
-    }
-    .sortable-ghost {
-      border: 2px dashed #999;
-      background: #ddd;
     }
     .top-controls, .controls {
       margin-top: 10px;
       display: flex;
-      gap: 15px;
+      gap: 10px;
       justify-content: center;
       flex-wrap: wrap;
-    }
-    .top-controls button,
-    .controls button {
-      font-size: 16px;
-      padding: 8px 12px;
     }
     input[type="file"] {
       display: none;
@@ -87,12 +53,6 @@
       width: 80px;
       cursor: pointer;
     }
-    .overlay {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100vw; height: 100vh;
-      z-index: 999;
-    }
   </style>
 </head>
 <body>
@@ -100,13 +60,11 @@
   <div class="box">
     <canvas id="canvas0" width="370" height="320"></canvas>
   </div>
-  <div id="layerPanel"></div>
   <div class="top-controls">
-    <label style="background:#ccc;padding:8px 16px;border-radius:4px;cursor:pointer;">
-      画像選択<input type="file" id="imgInput" accept="image/*" multiple>
+    <label style="background:#ccc;padding:6px 12px;border-radius:4px;cursor:pointer;">
+      画像選択<input type="file" accept="image/*" onchange="handleFileSelect(event, 'canvas0')">
     </label>
-    <button onclick="showTemplateSelector()">テンプレ</button>
-    <button onclick="copyActiveObject()">コピー</button>
+    <button onclick="showTemplateSelector('canvas0')">テンプレ</button>
     <button onclick="deleteActiveObject('canvas0')">削除</button>
   </div>
   <div class="controls">
@@ -117,25 +75,160 @@
   </div>
 </div>
 <div class="template-modal" id="templateModal"></div>
-<div class="overlay" id="modalOverlay" style="display:none;"></div>
 
 <script>
 let canvases = [];
 let historyMap = new Map();
-let layers = [];
+const templateImages = [
+  "https://nabe11921192.github.io/assets/template1.png",
+  "https://nabe11921192.github.io/assets/template2.png",
+  "https://nabe11921192.github.io/assets/template3.png",
+  "https://nabe11921192.github.io/assets/template4.png",
+  "https://nabe11921192.github.io/assets/template5.png",
+  "https://nabe11921192.github.io/assets/template6.png"
+];
+let currentCanvasIdForTemplate = null;
+
 const canvas = new fabric.Canvas('canvas0', {
-  preserveObjectStacking: true,
-  selection: true
+  selection: false,
+  preserveObjectStacking: true
 });
 canvases.push(canvas);
 saveState(canvas);
+
+// ✅ クリックによる画像切替処理
+let lastClickedObj = null;
+
+canvas.on('mouse:down', function(opt) {
+  const objs = canvas.getObjects().filter(o => o.selectable);
+  if (!opt.target) return;
+
+  const target = opt.target;
+  const current = canvas.getActiveObject();
+
+  if (current === target && lastClickedObj === target) {
+    const idx = objs.indexOf(target);
+    const nextObj = objs.slice(0, idx).reverse().find(o => o !== target);
+    if (nextObj) {
+      canvas.setActiveObject(nextObj);
+      nextObj.bringToFront();
+      lastClickedObj = nextObj;
+    }
+  } else {
+    canvas.setActiveObject(target);
+    target.bringToFront();
+    lastClickedObj = target;
+  }
+
+  canvas.requestRenderAll();
+});
+
+// ピンチズーム対応
+let touchStartDist = 0;
+canvas.getElement().addEventListener('touchmove', function(e) {
+  if (e.touches.length === 2) {
+    const dist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    if (touchStartDist === 0) {
+      touchStartDist = dist;
+      return;
+    }
+    const scale = dist / touchStartDist;
+    const obj = canvas.getActiveObject();
+    if (obj) {
+      obj.scaleX *= scale;
+      obj.scaleY *= scale;
+      canvas.requestRenderAll();
+      touchStartDist = dist;
+    }
+    e.preventDefault();
+  }
+}, { passive: false });
+
+canvas.getElement().addEventListener('touchend', function() {
+  touchStartDist = 0;
+});
+
+function handleFileSelect(e, canvasId) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const imgSrc = evt.target.result;
+    const canvas = canvases.find(c => c.getElement().id === canvasId);
+    fabric.Image.fromURL(imgSrc, function(fabricImg) {
+      const scale = Math.min(370 / fabricImg.width, 320 / fabricImg.height);
+      fabricImg.set({
+        left: 0, top: 0, originX: 'left', originY: 'top',
+        scaleX: scale, scaleY: scale
+      });
+      canvas.add(fabricImg);
+      canvas.setActiveObject(fabricImg);
+      saveState(canvas);
+    }, { crossOrigin: 'anonymous' });
+  };
+  reader.readAsDataURL(file);
+}
+
+function showTemplateSelector(canvasId) {
+  currentCanvasIdForTemplate = canvasId;
+  const modal = document.getElementById('templateModal');
+  modal.innerHTML = '';
+  templateImages.forEach(src => {
+    const img = document.createElement('img');
+    img.src = src;
+    img.onclick = () => insertTemplateImage(src);
+    modal.appendChild(img);
+  });
+  modal.style.display = 'flex';
+}
+
+function insertTemplateImage(src) {
+  const canvas = canvases.find(c => c.getElement().id === currentCanvasIdForTemplate);
+  fabric.Image.fromURL(src, function(img) {
+    const scale = Math.min(370 / img.width, 320 / img.height);
+    img.set({
+      left: 0, top: 0, originX: 'left', originY: 'top',
+      scaleX: scale, scaleY: scale
+    });
+    canvas.add(img);
+    canvas.setActiveObject(img);
+    saveState(canvas);
+  }, { crossOrigin: 'anonymous' });
+  document.getElementById('templateModal').style.display = 'none';
+}
+
+function deleteActiveObject(canvasId) {
+  const canvas = canvases.find(c => c.getElement().id === canvasId);
+  const obj = canvas.getActiveObject();
+  if (obj) {
+    canvas.remove(obj);
+    saveState(canvas);
+  }
+}
+
+function saveImage(canvasId) {
+  const canvas = canvases.find(c => c.getElement().id === canvasId);
+  canvas.discardActiveObject();
+  canvas.clearContext(canvas.contextTop);
+  canvas.renderAll();
+  canvas.getElement().toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = canvasId + '.png';
+    a.click();
+  }, 'image/png');
+}
 
 function saveState(canvas) {
   const id = canvas.getElement().id;
   if (!historyMap.has(id)) {
     historyMap.set(id, { undo: [], redo: [] });
   }
-  const state = JSON.stringify(canvas.toDatalessJSON());
+  const state = canvas.toJSON();
   historyMap.get(id).undo.push(state);
   historyMap.get(id).redo = [];
 }
@@ -144,67 +237,23 @@ function restoreState(canvasId, type) {
   const canvas = canvases.find(c => c.getElement().id === canvasId);
   const history = historyMap.get(canvasId);
   if (!history || !history[type].length) return;
-  const current = JSON.stringify(canvas.toDatalessJSON());
+  const current = canvas.toJSON();
   const state = history[type].pop();
   if (type === 'undo') history.redo.push(current);
   else history.undo.push(current);
-  canvas.loadFromJSON(JSON.parse(state), () => canvas.renderAll());
+  canvas.loadFromJSON(state, () => canvas.renderAll());
 }
 
 function undo(canvasId) { restoreState(canvasId, 'undo'); }
 function redo(canvasId) { restoreState(canvasId, 'redo'); }
 
-canvas.on('object:modified', () => saveState(canvas));
-canvas.on('object:added', () => saveState(canvas));
-canvas.on('object:removed', () => saveState(canvas));
-
-document.getElementById('imgInput').addEventListener('change', function(e) {
-  const files = Array.from(e.target.files);
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-      fabric.Image.fromURL(evt.target.result, function(img) {
-        const scale = Math.min(370 / img.width, 320 / img.height);
-        img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: true });
-        layers.push(img);
-        canvas.add(img);
-        canvas.setActiveObject(img);
-        canvas.requestRenderAll();
-      }, { crossOrigin: 'anonymous' });
-    };
-    reader.readAsDataURL(file);
-  });
-});
-
-canvas.getElement().addEventListener('touchstart', (e) => {
-  if (e.touches.length === 2) {
-    const dx = e.touches[0].clientX - e.touches[1].clientX;
-    const dy = e.touches[0].clientY - e.touches[1].clientY;
-    window.initialDistance = Math.sqrt(dx * dx + dy * dy);
+function confirmReset(canvasId) {
+  if (confirm('この枠の画像をすべて消去しますか？')) {
+    const canvas = canvases.find(c => c.getElement().id === canvasId);
+    canvas.clear();
+    saveState(canvas);
   }
-}, { passive: false });
-
-canvas.getElement().addEventListener('touchmove', (e) => {
-  if (e.touches.length === 2 && window.initialDistance) {
-    const dx = e.touches[0].clientX - e.touches[1].clientX;
-    const dy = e.touches[0].clientY - e.touches[1].clientY;
-    const newDistance = Math.sqrt(dx * dx + dy * dy);
-    const scaleChange = newDistance / window.initialDistance;
-    const active = canvas.getActiveObject();
-    if (active) {
-      active.scaleX *= scaleChange;
-      active.scaleY *= scaleChange;
-      active.setCoords();
-      canvas.requestRenderAll();
-      window.initialDistance = newDistance;
-    }
-    e.preventDefault();
-  }
-}, { passive: false });
-
-canvas.getElement().addEventListener('touchend', () => {
-  window.initialDistance = null;
-});
+}
 </script>
 </body>
 </html>
