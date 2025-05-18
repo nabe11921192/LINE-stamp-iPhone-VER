@@ -4,82 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>画像エディタ完全最終版</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js">
-
-// canvas 初期化
-const canvas = new fabric.Canvas('canvas0', {
-  preserveObjectStacking: true,
-  selection: true
-});
-
-// 画像選択から追加
-const imgInput = document.getElementById('imgInput');
-imgInput.addEventListener('change', function(e) {
-  const files = Array.from(e.target.files);
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-      fabric.Image.fromURL(evt.target.result, function(img) {
-        const scale = Math.min(370 / img.width, 320 / img.height);
-        img.set({
-          left: 0, top: 0,
-          scaleX: scale, scaleY: scale,
-          selectable: true,
-          hasBorders: true,
-          hasControls: true,
-          objectCaching: false
-        });
-        img.setCoords();
-        canvas.add(img);
-        canvas.setActiveObject(img);
-        canvas.requestRenderAll();
-      }, { crossOrigin: 'anonymous' });
-    };
-    reader.readAsDataURL(file);
-  });
-});
-
-// テンプレ表示
-function showTemplateSelector() {
-  const modal = document.getElementById('templateModal');
-  const templateImages = [
-    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/2721c1a2-cca1-4015-b489-17487fb5db03.png",
-    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/2e2b364a-39cc-4aa6-860b-e1be1cef26d7.png",
-    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/4815703a-d899-4e24-84ad-82e9e7b19c45.png",
-    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/5afbcc61-3709-4292-a376-6fb75fd027f9.png",
-    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/6ae92533-5c01-4cc5-adc1-9bd8713eedf9.png",
-    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/80a6d75f-7c3b-4926-8c50-48c6a1a6ff25.png"
-  ];
-  modal.innerHTML = '';
-  templateImages.forEach(src => {
-    const img = document.createElement('img');
-    img.src = src;
-    img.onclick = () => insertTemplateImage(src);
-    modal.appendChild(img);
-  });
-  modal.style.display = 'flex';
-}
-
-// テンプレ画像挿入
-function insertTemplateImage(src) {
-  fabric.Image.fromURL(src, function(img) {
-    const scale = Math.min(370 / img.width, 320 / img.height);
-    img.set({
-      left: 0, top: 0,
-      scaleX: scale, scaleY: scale,
-      selectable: true,
-      hasBorders: true,
-      hasControls: true,
-      objectCaching: false
-    });
-    img.setCoords();
-    canvas.add(img);
-    canvas.setActiveObject(img);
-    canvas.requestRenderAll();
-  }, { crossOrigin: 'anonymous' });
-  document.getElementById('templateModal').style.display = 'none';
-}
-</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <style>
@@ -247,5 +172,75 @@ function rotateSelected(deg) {
 <div style="position: fixed; bottom: 5px; right: 10px; font-size: 12px; color: #666; z-index: 999;">
   Ver. 1.0.0
 </div>
+<script>
+const canvas = new fabric.Canvas('canvas0', {
+  preserveObjectStacking: true,
+  selection: true
+});
+
+document.getElementById('imgInput').addEventListener('change', function(e) {
+  const files = Array.from(e.target.files);
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      fabric.Image.fromURL(evt.target.result, function(img) {
+        const scale = Math.min(370 / img.width, 320 / img.height);
+        img.set({
+          left: 0, top: 0,
+          scaleX: scale, scaleY: scale,
+          selectable: true,
+          hasBorders: true,
+          hasControls: true,
+          objectCaching: false
+        });
+        img.setCoords();
+        canvas.add(img);
+        canvas.setActiveObject(img);
+        canvas.requestRenderAll();
+      }, { crossOrigin: 'anonymous' });
+    };
+    reader.readAsDataURL(file);
+  });
+});
+
+function showTemplateSelector() {
+  const modal = document.getElementById('templateModal');
+  const templateImages = [
+    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/2721c1a2-cca1-4015-b489-17487fb5db03.png",
+    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/2e2b364a-39cc-4aa6-860b-e1be1cef26d7.png",
+    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/4815703a-d899-4e24-84ad-82e9e7b19c45.png",
+    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/5afbcc61-3709-4292-a376-6fb75fd027f9.png",
+    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/6ae92533-5c01-4cc5-adc1-9bd8713eedf9.png",
+    "https://nabe11921192.github.io/LINE-stamp-iPhone-VER/assets/80a6d75f-7c3b-4926-8c50-48c6a1a6ff25.png"
+  ];
+  modal.innerHTML = '';
+  templateImages.forEach(src => {
+    const img = document.createElement('img');
+    img.src = src;
+    img.onclick = () => insertTemplateImage(src);
+    modal.appendChild(img);
+  });
+  modal.style.display = 'flex';
+}
+
+function insertTemplateImage(src) {
+  fabric.Image.fromURL(src, function(img) {
+    const scale = Math.min(370 / img.width, 320 / img.height);
+    img.set({
+      left: 0, top: 0,
+      scaleX: scale, scaleY: scale,
+      selectable: true,
+      hasBorders: true,
+      hasControls: true,
+      objectCaching: false
+    });
+    img.setCoords();
+    canvas.add(img);
+    canvas.setActiveObject(img);
+    canvas.requestRenderAll();
+  }, { crossOrigin: 'anonymous' });
+  document.getElementById('templateModal').style.display = 'none';
+}
+</script>
 </body>
 </html>
