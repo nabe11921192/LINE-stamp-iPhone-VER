@@ -166,7 +166,7 @@ saveState();
   <div class="box">
     <canvas id="canvas0" width="370" height="320"></canvas>
   </div>
-  <div id="layerPanel"></div>
+  <div id="layerPanel" style="max-width: 90vw; overflow-x: auto;"></div>
   <div class="top-controls">
     <label>画像選択<input type="file" id="imgInput" accept="image/*" multiple></label>
     <button onclick="showTemplateSelector('canvas0')">テンプレ</button>
@@ -180,12 +180,21 @@ saveState();
     <button onclick="confirmReset('canvas0')">リセット</button>
   </div>
   <div class="control-panel">
-  <div style="display: flex; flex-direction: column; gap: 5px;">
-    <button onclick="scaleSelected(1.1)">拡大</button>
-    <button onclick="scaleSelected(0.9)">縮小</button>
-    <button onclick="rotateSelected(-15)">左回転</button>
-    <button onclick="rotateSelected(15)">右回転</button>
+  <div style="display: grid; grid-template-columns: repeat(2, auto); gap: 6px;">
+    <button style="font-size:16px;padding:10px 14px;" onclick="scaleSelected(1.1)">拡大</button>
+    <button style="font-size:16px;padding:10px 14px;" onclick="scaleSelected(0.9)">縮小</button>
+    <button style="font-size:16px;padding:10px 14px;" onclick="rotateSelected(-15)">左回転</button>
+    <button style="font-size:16px;padding:10px 14px;" onclick="rotateSelected(15)">右回転</button>
   </div>
+  <div style="display: flex; flex-direction: column; align-items: center; margin-left: 30px;">
+    <button style="font-size:16px;padding:10px 14px;" onclick="moveSelected(0, -10)">↑</button>
+    <div style="display: flex; gap: 6px;">
+      <button style="font-size:16px;padding:10px 14px;" onclick="moveSelected(-10, 0)">←</button>
+      <button style="font-size:16px;padding:10px 14px;" onclick="moveSelected(10, 0)">→</button>
+    </div>
+    <button style="font-size:16px;padding:10px 14px;" onclick="moveSelected(0, 10)">↓</button>
+  </div>
+</div>
   <div style="display: flex; flex-direction: column; align-items: center; margin-left: 30px;">
     <button onclick="moveSelected(0, -10)">↑</button>
     <div style="display: flex; gap: 5px;">
