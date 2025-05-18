@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>画像エディタ完全最終版</title>
+  <title>画像エディタ 完全ピンチ対応</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
   <style>
     html, body {
       margin: 0;
@@ -15,6 +16,11 @@
       background: #f0f0f0;
       font-family: sans-serif;
       overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    button {
+      touch-action: manipulation;
     }
     .container {
       display: flex;
@@ -27,6 +33,7 @@
       height: 320px;
       background: white;
       border: 1px solid #ccc;
+      touch-action: none;
     }
     #layerPanel {
       display: flex;
@@ -46,7 +53,6 @@
       object-fit: cover;
       cursor: grab;
       user-select: none;
-      touch-action: none;
     }
     .layer-thumb.active {
       border-color: red;
@@ -79,7 +85,7 @@
       gap: 10px;
       margin-top: 10px;
       flex-wrap: wrap;
-      justify-content:center;
+      justify-content: center;
     }
     .top-controls label,
     .top-controls button,
@@ -133,7 +139,7 @@
 </div>
 <div class="template-modal" id="templateModal"></div>
 <div style="position: fixed; bottom: 5px; right: 10px; font-size: 12px; color: #666; z-index: 999;">
-  Ver. 1.0.0
+  Ver. 1.1.0
 </div>
 <script>
 const canvas = new fabric.Canvas('canvas0', {
@@ -328,6 +334,27 @@ new Sortable(document.getElementById('layerPanel'), {
     });
     layers = newLayers.filter(Boolean);
     canvas._objects = layers;
+    canvas.requestRenderAll();
+  }
+});
+
+// ✅ ピンチ操作：Hammer.js でアクティブオブジェクト拡大
+const hammer = new Hammer(canvas.upperCanvasEl);
+hammer.get('pinch').set({ enable: true });
+
+let initialScale = 1;
+hammer.on('pinchstart', () => {
+  const obj = canvas.getActiveObject();
+  if (obj) {
+    initialScale = obj.scaleX;
+  }
+});
+hammer.on('pinch', ev => {
+  const obj = canvas.getActiveObject();
+  if (obj) {
+    const scale = initialScale * ev.scale;
+    obj.scaleX = obj.scaleY = scale;
+    obj.setCoords();
     canvas.requestRenderAll();
   }
 });
