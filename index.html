@@ -141,6 +141,20 @@ const canvas = new fabric.Canvas('canvas0', {
   selection: true
 });
 
+new Sortable(document.getElementById('layerPanel'), {
+  animation: 150,
+  ghostClass: 'sortable-ghost',
+  onEnd: function () {
+    const newOrder = Array.from(document.querySelectorAll(".layer-thumb"));
+    const newLayers = newOrder.map(el => {
+      return layers.find(o => o._element?.src === el.src || o.getSrc?.() === el.src);
+    });
+    layers = newLayers.filter(Boolean);
+    canvas._objects = layers;
+    canvas.requestRenderAll();
+  }
+});
+
 let history = [];
 let redoStack = [];
 let layers = [];
@@ -260,7 +274,12 @@ function addLayerThumb(obj, src) {
   thumb.onclick = () => {
     canvas.setActiveObject(obj);
     canvas.requestRenderAll();
+    document.querySelectorAll('.layer-thumb').forEach(t => t.classList.remove('active'));
+    thumb.classList.add('active');
   };
+  document.getElementById('layerPanel').appendChild(thumb);
+  layers.push(obj);
+};
   document.getElementById('layerPanel').appendChild(thumb);
 }
 function copyActiveObject() {
@@ -279,9 +298,17 @@ function deleteActiveObject() {
   const obj = canvas.getActiveObject();
   if (obj) {
     canvas.remove(obj);
+    const thumbs = document.querySelectorAll('.layer-thumb');
+    thumbs.forEach(t => {
+      if (t.src === obj._element?.src || t.src === obj.getSrc?.()) {
+        t.remove();
+      }
+    });
+    layers = layers.filter(o => o !== obj);
     canvas.requestRenderAll();
     saveState();
   }
+}
 }
 </script>
 </body>
