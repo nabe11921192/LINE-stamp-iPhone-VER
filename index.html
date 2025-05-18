@@ -130,6 +130,34 @@ const canvas = new fabric.Canvas('canvas0', {
 canvases.push(canvas);
 saveState(canvas);
 
+function saveState(canvas) {
+  const id = canvas.getElement().id;
+  if (!historyMap.has(id)) {
+    historyMap.set(id, { undo: [], redo: [] });
+  }
+  const state = JSON.stringify(canvas.toDatalessJSON());
+  historyMap.get(id).undo.push(state);
+  historyMap.get(id).redo = [];
+}
+
+function restoreState(canvasId, type) {
+  const canvas = canvases.find(c => c.getElement().id === canvasId);
+  const history = historyMap.get(canvasId);
+  if (!history || !history[type].length) return;
+  const current = JSON.stringify(canvas.toDatalessJSON());
+  const state = history[type].pop();
+  if (type === 'undo') history.redo.push(current);
+  else history.undo.push(current);
+  canvas.loadFromJSON(JSON.parse(state), () => canvas.renderAll());
+}
+
+function undo(canvasId) { restoreState(canvasId, 'undo'); }
+function redo(canvasId) { restoreState(canvasId, 'redo'); }
+
+canvas.on('object:modified', () => saveState(canvas));
+canvas.on('object:added', () => saveState(canvas));
+canvas.on('object:removed', () => saveState(canvas));
+
 let initialDistance = null;
 canvas.getElement().addEventListener('touchstart', (e) => {
   if (e.touches.length === 2) {
@@ -148,6 +176,7 @@ canvas.getElement().addEventListener('touchmove', (e) => {
     if (active) {
       active.scaleX *= scaleChange;
       active.scaleY *= scaleChange;
+      active.setCoords();
       canvas.requestRenderAll();
       initialDistance = newDistance;
     }
@@ -158,114 +187,6 @@ canvas.getElement().addEventListener('touchend', () => {
   initialDistance = null;
 });
 
-document.getElementById('imgInput').addEventListener('change', function(e) {
-  const files = Array.from(e.target.files);
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-      fabric.Image.fromURL(evt.target.result, function(img) {
-        const scale = Math.min(370 / img.width, 320 / img.height);
-        img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: true });
-        layers.push(img);
-        canvas.add(img);
-        addLayerThumb(img, evt.target.result);
-        canvas.setActiveObject(img);
-        canvas.requestRenderAll();
-      }, { crossOrigin: 'anonymous' });
-    };
-    reader.readAsDataURL(file);
-  });
-});
-
-function addLayerThumb(obj, src) {
-  const thumb = document.createElement('img');
-  thumb.src = src;
-  thumb.className = 'layer-thumb';
-  thumb.addEventListener('click', () => {
-    layers.forEach(o => o.selectable = false);
-    obj.selectable = true;
-    canvas.setActiveObject(obj);
-    canvas.requestRenderAll();
-    document.querySelectorAll('.layer-thumb').forEach(t => t.classList.remove('active'));
-    thumb.classList.add('active');
-  });
-  thumb.onerror = () => thumb.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAFUlEQVR42u3BMQEAAAgDoJvc2+1gBwAAAACAfApMAAG2XG8kAAAAAElFTkSuQmCC';
-  document.getElementById('layerPanel').appendChild(thumb);
-}
-
-new Sortable(document.getElementById('layerPanel'), {
-  animation: 150,
-  ghostClass: 'sortable-ghost',
-  onEnd: function (evt) {
-    const newOrder = Array.from(document.querySelectorAll(".layer-thumb"));
-    const newLayers = newOrder.map(el =>
-      layers.find(o => o._element && el.src.includes(o._element.src.split('?')[0]))
-    );
-    layers = newLayers.filter(Boolean);
-    reorderCanvas();
-  }
-});
-
-function reorderCanvas() {
-  canvas.clear();
-  for (let i = 0; i < layers.length; i++) {
-    canvas.add(layers[i]);
-  }
-  canvas.requestRenderAll();
-}
-
-function copyActiveObject() {
-  const obj = canvas.getActiveObject();
-  if (obj) {
-    obj.clone(cloned => {
-      cloned.set({ left: obj.left + 10, top: obj.top + 10 });
-      layers.push(cloned);
-      canvas.add(cloned);
-      addLayerThumb(cloned, cloned._element.src);
-      canvas.setActiveObject(cloned);
-      canvas.requestRenderAll();
-    });
-  }
-}
-
-function showTemplateSelector() {
-  const modal = document.getElementById('templateModal');
-  const overlay = document.getElementById('modalOverlay');
-  modal.innerHTML = '';
-  fetch('assets/templateList.json')
-    .then(res => res.json())
-    .then(templateImages => {
-      templateImages.forEach(src => {
-        const img = document.createElement('img');
-        img.src = src;
-        img.onclick = () => {
-          insertTemplateImage(src);
-          modal.style.display = 'none';
-          overlay.style.display = 'none';
-        };
-        modal.appendChild(img);
-      });
-      modal.style.display = 'flex';
-      overlay.style.display = 'block';
-    });
-  overlay.onclick = () => {
-    modal.style.display = 'none';
-    overlay.style.display = 'none';
-  };
-}
-
-function insertTemplateImage(src) {
-  fabric.Image.fromURL(src, function(img) {
-    const scale = Math.min(370 / img.width, 320 / img.height);
-    img.set({ left: 0, top: 0, scaleX: scale, scaleY: scale, selectable: true });
-    layers.push(img);
-    canvas.add(img);
-    addLayerThumb(img, src);
-    canvas.setActiveObject(img);
-    canvas.requestRenderAll();
-  }, { crossOrigin: 'anonymous' });
-}
-
 function deleteActiveObject(canvasId) {
   const canvas = canvases.find(c => c.getElement().id === canvasId);
   const obj = canvas.getActiveObject();
@@ -273,57 +194,19 @@ function deleteActiveObject(canvasId) {
     canvas.remove(obj);
     layers = layers.filter(o => o !== obj);
     saveState(canvas);
-    reorderCanvas();
-    document.getElementById('layerPanel').innerHTML = '';
-    layers.forEach(o => addLayerThumb(o, o._element.src));
+    canvas.discardActiveObject();
+    canvas.requestRenderAll();
   }
 }
-
-function saveImage(canvasId) {
-  const canvas = canvases.find(c => c.getElement().id === canvasId);
-  canvas.discardActiveObject();
-  canvas.clearContext(canvas.contextTop);
-  canvas.renderAll();
-  canvas.getElement().toBlob(blob => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = canvasId + '.png';
-    a.click();
-  }, 'image/png');
-}
-
-function saveState(canvas) {
-  const id = canvas.getElement().id;
-  if (!historyMap.has(id)) {
-    historyMap.set(id, { undo: [], redo: [] });
-  }
-  const state = canvas.toJSON();
-  historyMap.get(id).undo.push(state);
-  historyMap.get(id).redo = [];
-}
-
-function restoreState(canvasId, type) {
-  const canvas = canvases.find(c => c.getElement().id === canvasId);
-  const history = historyMap.get(canvasId);
-  if (!history || !history[type].length) return;
-  const current = canvas.toJSON();
-  const state = history[type].pop();
-  if (type === 'undo') history.redo.push(current);
-  else history.undo.push(current);
-  canvas.loadFromJSON(state, () => canvas.renderAll());
-}
-
-function undo(canvasId) { restoreState(canvasId, 'undo'); }
-function redo(canvasId) { restoreState(canvasId, 'redo'); }
 
 function confirmReset(canvasId) {
   if (confirm('この枠の画像をすべて消去しますか？')) {
     const canvas = canvases.find(c => c.getElement().id === canvasId);
     canvas.clear();
-    document.getElementById('layerPanel').innerHTML = '';
     layers = [];
+    document.getElementById('layerPanel').innerHTML = '';
     saveState(canvas);
+    canvas.renderAll();
   }
 }
 </script>
