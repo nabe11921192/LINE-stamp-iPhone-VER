@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -194,22 +193,18 @@ function copyActiveObject() {
 
 function showTemplateSelector() {
   const modal = document.getElementById('templateModal');
-  const templateImages = [
-    "https://nabe11921192.github.io/assets/template1.png",
-    "https://nabe11921192.github.io/assets/template2.png",
-    "https://nabe11921192.github.io/assets/template3.png",
-    "https://nabe11921192.github.io/assets/template4.png",
-    "https://nabe11921192.github.io/assets/template5.png",
-    "https://nabe11921192.github.io/assets/template6.png"
-  ];
   modal.innerHTML = '';
-  templateImages.forEach(src => {
-    const img = document.createElement('img');
-    img.src = src;
-    img.onclick = () => insertTemplateImage(src);
-    modal.appendChild(img);
-  });
-  modal.style.display = 'flex';
+  fetch('assets/templateList.json')
+    .then(res => res.json())
+    .then(templateImages => {
+      templateImages.forEach(src => {
+        const img = document.createElement('img');
+        img.src = src;
+        img.onclick = () => insertTemplateImage(src);
+        modal.appendChild(img);
+      });
+      modal.style.display = 'flex';
+    });
 }
 
 function insertTemplateImage(src) {
