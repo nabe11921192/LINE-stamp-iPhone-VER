@@ -79,7 +79,7 @@
       gap: 10px;
       margin-top: 10px;
       flex-wrap: wrap;
-      justify-content: center;
+      justify-content:center;
     }
     .top-controls label,
     .top-controls button,
@@ -136,27 +136,9 @@
   Ver. 1.0.0
 </div>
 <script>
-let history = [];
-let redoStack = [];
-let layers = [];
-
 const canvas = new fabric.Canvas('canvas0', {
   preserveObjectStacking: true,
   selection: true
-});
-
-new Sortable(document.getElementById('layerPanel'), {
-  animation: 150,
-  ghostClass: 'sortable-ghost',
-  onEnd: function () {
-    const newOrder = Array.from(document.querySelectorAll(".layer-thumb"));
-    const newLayers = newOrder.map(el => {
-      return layers.find(o => o._element?.src === el.src || o.getSrc?.() === el.src);
-    });
-    layers = newLayers.filter(Boolean);
-    canvas._objects = layers;
-    canvas.requestRenderAll();
-  }
 });
 
 let history = [];
@@ -171,14 +153,20 @@ function undo() {
   if (history.length > 0) {
     redoStack.push(JSON.stringify(canvas.toJSON()));
     const state = history.pop();
-    canvas.loadFromJSON(state, () => canvas.renderAll());
+    canvas.loadFromJSON(state, () => {
+      canvas.renderAll();
+      updateLayerPanel();
+    });
   }
 }
 function redo() {
   if (redoStack.length > 0) {
     history.push(JSON.stringify(canvas.toJSON()));
     const state = redoStack.pop();
-    canvas.loadFromJSON(state, () => canvas.renderAll());
+    canvas.loadFromJSON(state, () => {
+      canvas.renderAll();
+      updateLayerPanel();
+    });
   }
 }
 function saveImage() {
@@ -206,6 +194,7 @@ function moveSelected(dx, dy) {
     obj.top += dy;
     obj.setCoords();
     canvas.requestRenderAll();
+    saveState();
   }
 }
 function scaleSelected(factor) {
@@ -215,6 +204,7 @@ function scaleSelected(factor) {
     obj.scaleY *= factor;
     obj.setCoords();
     canvas.requestRenderAll();
+    saveState();
   }
 }
 function rotateSelected(deg) {
@@ -225,6 +215,7 @@ function rotateSelected(deg) {
     obj.setPositionByOrigin(center, 'center', 'center');
     obj.setCoords();
     canvas.requestRenderAll();
+    saveState();
   }
 }
 function showTemplateSelector() {
@@ -285,6 +276,23 @@ function addLayerThumb(obj, src) {
   };
   document.getElementById('layerPanel').appendChild(thumb);
   layers.push(obj);
+  updateLayerPanel();
+}
+function updateLayerPanel() {
+  const panel = document.getElementById('layerPanel');
+  panel.innerHTML = '';
+  layers.forEach(layer => {
+    const thumb = document.createElement('img');
+    thumb.src = layer._element?.src || layer.getSrc?.();
+    thumb.className = 'layer-thumb';
+    thumb.onclick = () => {
+      canvas.setActiveObject(layer);
+      canvas.requestRenderAll();
+      document.querySelectorAll('.layer-thumb').forEach(t => t.classList.remove('active'));
+      thumb.classList.add('active');
+    };
+    panel.appendChild(thumb);
+  });
 }
 function copyActiveObject() {
   const obj = canvas.getActiveObject();
@@ -294,6 +302,7 @@ function copyActiveObject() {
       canvas.add(cloned);
       canvas.setActiveObject(cloned);
       canvas.requestRenderAll();
+      addLayerThumb(cloned, cloned._element?.src || cloned.getSrc?.());
       saveState();
     });
   }
@@ -302,17 +311,28 @@ function deleteActiveObject() {
   const obj = canvas.getActiveObject();
   if (obj) {
     canvas.remove(obj);
-    const thumbs = document.querySelectorAll('.layer-thumb');
-    thumbs.forEach(t => {
-      if (t.src === obj._element?.src || t.src === obj.getSrc?.()) {
-        t.remove();
-      }
-    });
     layers = layers.filter(o => o !== obj);
+    updateLayerPanel();
     canvas.requestRenderAll();
     saveState();
   }
 }
+
+new Sortable(document.getElementById('layerPanel'), {
+  animation: 150,
+  ghostClass: 'sortable-ghost',
+  onEnd: function () {
+    const newOrder = Array.from(document.querySelectorAll(".layer-thumb"));
+    const newLayers = newOrder.map(el => {
+      return layers.find(o => o._element?.src === el.src || o.getSrc?.() === el.src);
+    });
+    layers = newLayers.filter(Boolean);
+    canvas._objects = layers;
+    canvas.requestRenderAll();
+  }
+});
+
+saveState();
 </script>
 </body>
 </html>
