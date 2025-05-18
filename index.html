@@ -79,19 +79,11 @@
     }
     .top-controls,
     .bottom-controls {
-      position: absolute;
       display: flex;
       gap: 10px;
+      margin-top: 10px;
       flex-wrap: wrap;
       justify-content: center;
-      width: 100%;
-      z-index: 10;
-    }
-    .top-controls {
-      top: 10px;
-    }
-    .bottom-controls {
-      bottom: 10px;
     }
     .top-controls label,
     .top-controls button,
@@ -109,16 +101,16 @@
 </head>
 <body>
 <div class="container">
+  <div class="box">
+    <canvas id="canvas0" width="370" height="320"></canvas>
+  </div>
+  <div id="layerPanel"></div>
   <div class="top-controls">
     <label>画像選択<input type="file" id="imgInput" accept="image/*" multiple></label>
     <button onclick="showTemplateSelector('canvas0')">テンプレ</button>
     <button onclick="copyActiveObject()">コピー</button>
     <button onclick="deleteActiveObject('canvas0')">削除</button>
   </div>
-  <div class="box">
-    <canvas id="canvas0" width="370" height="320"></canvas>
-  </div>
-  <div id="layerPanel"></div>
   <div class="bottom-controls">
     <button onclick="undo('canvas0')">戻る</button>
     <button onclick="redo('canvas0')">進む</button>
